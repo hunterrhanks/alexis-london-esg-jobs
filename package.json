@@ -1,0 +1,28 @@
+{
+  "name": "alexis-london-esg-job-board",
+  "version": "1.0.0",
+  "description": "Custom ESG job board for London-based and remote roles with visa sponsorship",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "fetch": "node -e \"const db = require('./db'); const {fetchAllJobs} = require('./fetcher'); db.initialize(); fetchAllJobs().then(() => process.exit(0))\""
+  },
+  "keywords": [
+    "esg",
+    "jobs",
+    "london",
+    "sustainability",
+    "visa-sponsorship"
+  ],
+  "author": "Alexis",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "better-sqlite3": "^12.6.2",
+    "express": "^5.2.1",
+    "node-cron": "^4.2.1",
+    "node-fetch": "^2.7.0",
+    "nodemailer": "^8.0.1",
+    "rss-parser": "^3.13.0"
+  }
+}

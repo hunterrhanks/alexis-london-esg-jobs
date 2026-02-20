@@ -1,0 +1,8 @@
+node_modules/
+jobs.db
+sponsor_cache.json
+server.log
+.env
+*.log
+.DS_Store
+Thumbs.db
