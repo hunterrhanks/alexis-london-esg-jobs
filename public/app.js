@@ -1,5 +1,5 @@
 // ============================================================
-// Alexis London ESG Job Board - Frontend
+// Alexis London ESG Job Board — V3.0 Frontend
 // ============================================================
 
 const state = {
@@ -13,6 +13,8 @@ const state = {
   saved: "",
   sponsorOnly: "",
   sort: "score",
+  status: "all",
+  visaConfidence: "all",
   selectedJobId: null,
 };
 
@@ -33,12 +35,17 @@ const $filterSource = $_("filterSource");
 const $filterSort = $_("filterSort");
 const $filterSaved = $_("filterSaved");
 const $filterSponsor = $_("filterSponsor");
+const $filterStatus = $_("filterStatus");
+const $filterVisa = $_("filterVisa");
 const $refreshBtn = $_("refreshBtn");
 const $sidebar = $_("sidebar");
 const $mobileFilterBtn = $_("mobileFilterBtn");
 const $mobileDetailOverlay = $_("mobileDetailOverlay");
 const $mobileDetailContent = $_("mobileDetailContent");
 const $mobileBackBtn = $_("mobileBackBtn");
+const $visaGreenCount = $_("visaGreenCount");
+const $visaYellowCount = $_("visaYellowCount");
+const $visaRedCount = $_("visaRedCount");
 
 // ---- Utility Functions ----
 function timeAgo(dateStr) {
@@ -74,6 +81,39 @@ function scoreColor(score) {
   return "var(--score-low)";
 }
 
+function probabilityColor(prob) {
+  if (prob >= 65) return "var(--visa-green)";
+  if (prob >= 35) return "var(--visa-yellow)";
+  return "var(--visa-red)";
+}
+
+function visaConfidenceEmoji(conf) {
+  if (conf === "green") return "\u{1F7E2}";
+  if (conf === "yellow") return "\u{1F7E1}";
+  if (conf === "red") return "\u{1F534}";
+  return "\u{26AA}";
+}
+
+function visaConfidenceLabel(conf) {
+  if (conf === "green") return "High";
+  if (conf === "yellow") return "Medium";
+  if (conf === "red") return "Low";
+  return "Unknown";
+}
+
+function statusLabel(s) {
+  const map = {
+    new: "New",
+    to_apply: "To Apply",
+    applied: "Applied",
+    interviewing: "Interviewing",
+    offer: "Offer",
+    rejected: "Rejected",
+    archived: "Archived",
+  };
+  return map[s] || s;
+}
+
 function isMobile() {
   return window.innerWidth <= 1200;
 }
@@ -105,6 +145,8 @@ async function fetchJobs() {
   if (state.remote) params.set("remote", state.remote);
   if (state.saved) params.set("saved", state.saved);
   if (state.sponsorOnly) params.set("sponsorOnly", state.sponsorOnly);
+  if (state.status !== "all") params.set("status", state.status);
+  if (state.visaConfidence !== "all") params.set("visaConfidence", state.visaConfidence);
 
   try {
     const res = await fetch(`/api/jobs?${params}`);
@@ -136,6 +178,10 @@ async function fetchStats() {
     if (data.verifiedCount !== undefined) {
       $sponsorStats.textContent = `${data.verifiedCount} verified sponsors \u00b7 Avg score: ${data.avgScore}`;
     }
+    // V3.0 visa stats
+    if ($visaGreenCount) $visaGreenCount.textContent = data.visaGreen || 0;
+    if ($visaYellowCount) $visaYellowCount.textContent = data.visaYellow || 0;
+    if ($visaRedCount) $visaRedCount.textContent = data.visaRed || 0;
   } catch (err) {
     console.error("Failed to fetch stats:", err);
   }
@@ -155,6 +201,111 @@ async function toggleSave(jobId, e) {
     }
   } catch (err) {
     console.error("Failed to toggle save:", err);
+  }
+}
+
+async function updateJobStatus(jobId, newStatus) {
+  try {
+    const res = await fetch(`/api/jobs/${encodeURIComponent(jobId)}/status`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: newStatus }),
+    });
+    const data = await res.json();
+    const job = state.jobs.find((j) => j.id === jobId);
+    if (job) job.status = data.status;
+    // Update card badge
+    const card = document.querySelector(`.job-card[data-id="${CSS.escape(jobId)}"]`);
+    if (card) {
+      const badge = card.querySelector(".badge-status");
+      if (badge) {
+        badge.className = `badge badge-status badge-status-${data.status}`;
+        badge.textContent = statusLabel(data.status);
+      }
+    }
+  } catch (err) {
+    console.error("Failed to update status:", err);
+  }
+}
+
+async function updateJobNotes(jobId, notes) {
+  try {
+    await fetch(`/api/jobs/${encodeURIComponent(jobId)}/notes`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ notes }),
+    });
+    const job = state.jobs.find((j) => j.id === jobId);
+    if (job) job.notes = notes;
+    // Show saved indicator
+    const indicator = document.getElementById("notesSaved");
+    if (indicator) {
+      indicator.classList.add("show");
+      setTimeout(() => indicator.classList.remove("show"), 2000);
+    }
+  } catch (err) {
+    console.error("Failed to update notes:", err);
+  }
+}
+
+async function generateOutreachKit(jobId) {
+  const btn = document.getElementById("btnOutreach");
+  if (btn) {
+    btn.disabled = true;
+    btn.classList.add("loading");
+    btn.textContent = "Generating...";
+  }
+  try {
+    const res = await fetch(`/api/jobs/${encodeURIComponent(jobId)}/outreach-kit`, { method: "POST" });
+    const kit = await res.json();
+    renderOutreachResult(kit);
+  } catch (err) {
+    console.error("Failed to generate outreach kit:", err);
+    const container = document.getElementById("outreachResult");
+    if (container) container.innerHTML = '<p style="color:var(--visa-red);font-size:13px;">Failed to generate kit. Try again.</p>';
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.classList.remove("loading");
+      btn.textContent = "\u2728 Generate Outreach Kit";
+    }
+  }
+}
+
+function renderOutreachResult(kit) {
+  const container = document.getElementById("outreachResult");
+  if (!container) return;
+
+  const bullets = (kit.resume_bullets || []).map(b => `<li>${escapeHtml(b)}</li>`).join("");
+
+  container.innerHTML = `
+    <div class="outreach-block">
+      <div class="outreach-block-label">LinkedIn Connection Message</div>
+      <div class="outreach-block-content" id="linkedinMsg">${escapeHtml(kit.linkedin_message || "")}</div>
+      <button class="btn-copy" onclick="copyToClipboard('linkedinMsg')">Copy</button>
+    </div>
+    <div class="outreach-block">
+      <div class="outreach-block-label">Tailored Resume Bullets</div>
+      <div class="outreach-block-content"><ul>${bullets}</ul></div>
+      <button class="btn-copy" onclick="copyToClipboard(null, ${escapeAttr(JSON.stringify(kit.resume_bullets || []))})">Copy All</button>
+    </div>
+  `;
+}
+
+function copyToClipboard(elId, textArray) {
+  let text;
+  if (elId) {
+    const el = document.getElementById(elId);
+    text = el ? el.textContent : "";
+  } else if (textArray) {
+    text = textArray.map(b => `\u2022 ${b}`).join("\n");
+  }
+  if (text) {
+    navigator.clipboard.writeText(text).then(() => {
+      // Brief visual feedback
+      event.target.textContent = "Copied!";
+      setTimeout(() => { event.target.textContent = "Copy"; }, 1500);
+    });
   }
 }
 
@@ -202,6 +353,9 @@ function renderJobs() {
     const isSaved = job.saved === 1;
     const isActive = job.id === state.selectedJobId;
     const score = job.match_score || 0;
+    const prob = job.success_probability || 0;
+    const visaConf = job.visa_confidence || "unknown";
+    const jobStatus = job.status || "new";
     const summarySnippet = job.ai_summary ? truncate(job.ai_summary, 120) : "";
 
     return `
@@ -230,13 +384,22 @@ function renderJobs() {
               ${job.salary ? `<span class="job-meta-item">${escapeHtml(job.salary)}</span>` : ""}
             </div>
             <div class="job-badges">
-              ${job.verified_sponsor ? `<span class="badge badge-sponsor">${shieldSvg} Verified Sponsor</span>` : ""}
+              <span class="badge badge-status badge-status-${jobStatus}">${statusLabel(jobStatus)}</span>
+              <span class="badge badge-visa-${visaConf}" title="Visa Confidence: ${visaConfidenceLabel(visaConf)}">${visaConfidenceEmoji(visaConf)} Visa</span>
+              ${job.verified_sponsor ? `<span class="badge badge-sponsor">${shieldSvg} Verified</span>` : ""}
               ${!job.verified_sponsor && job.visa_sponsorship ? '<span class="badge badge-visa">Visa Sponsor</span>' : ""}
               ${job.remote ? '<span class="badge badge-remote">Remote</span>' : ""}
               <span class="badge badge-source">${escapeHtml(job.source)}</span>
               ${tags.map((t) => `<span class="badge badge-tag">${escapeHtml(t)}</span>`).join("")}
             </div>
           </div>
+        </div>
+        <div class="job-probability-row">
+          <span class="probability-label">Success</span>
+          <div class="probability-bar">
+            <div class="probability-fill" style="width:${prob}%;background:${probabilityColor(prob)}"></div>
+          </div>
+          <span class="probability-value" style="color:${probabilityColor(prob)}">${prob}%</span>
         </div>
         ${summarySnippet ? `<div class="job-summary">${escapeHtml(summarySnippet)}</div>` : ""}
       </div>`;
@@ -246,9 +409,43 @@ function renderJobs() {
 function buildDetailHtml(job) {
   const tags = (job.tags || "").split(",").map((t) => t.trim()).filter(Boolean);
   const score = job.match_score || 0;
+  const prob = job.success_probability || 0;
+  const visaConf = job.visa_confidence || "unknown";
+  const jobStatus = job.status || "new";
+  const salaryNum = job.salary_num;
+
+  // Visa traffic light text
+  let visaTrafficText = "";
+  if (visaConf === "green") {
+    visaTrafficText = `<strong class="visa-traffic-text green">High Visa Confidence</strong>Verified sponsor + salary meets 2026 threshold.`;
+  } else if (visaConf === "yellow") {
+    visaTrafficText = `<strong class="visa-traffic-text yellow">Medium Visa Confidence</strong>Verified sponsor, but salary undisclosed or near threshold. Confirm with employer.`;
+  } else if (visaConf === "red") {
+    visaTrafficText = `<strong class="visa-traffic-text red">Low Visa Confidence</strong>Not found on Home Office Register. May not sponsor visas.`;
+  } else {
+    visaTrafficText = `<strong>Unknown</strong>Visa confidence not yet assessed.`;
+  }
 
   return `
     <div class="detail-header">
+      <!-- Visa Confidence Traffic Light -->
+      <div class="visa-traffic-light ${visaConf}">
+        <div class="visa-traffic-icon">${visaConfidenceEmoji(visaConf)}</div>
+        <div class="visa-traffic-text">${visaTrafficText}</div>
+      </div>
+
+      <!-- Success Probability -->
+      <div class="detail-probability">
+        <div class="detail-probability-header">
+          <span class="detail-probability-label">Success Probability</span>
+          <span class="detail-probability-value" style="color:${probabilityColor(prob)}">${prob}%</span>
+        </div>
+        <div class="detail-probability-bar">
+          <div class="detail-probability-fill" style="width:${prob}%;background:${probabilityColor(prob)}"></div>
+        </div>
+      </div>
+
+      <!-- Match Score -->
       <div class="detail-score-row">
         <div class="detail-score-ring">
           ${scoreRingSvg(score, 56, 4)}
@@ -273,6 +470,16 @@ function buildDetailHtml(job) {
         ${job.job_type ? `<span class="job-meta-item">${briefcaseSvg} ${escapeHtml(job.job_type)}</span>` : ""}
         ${job.salary ? `<span class="job-meta-item">${escapeHtml(job.salary)}</span>` : ""}
       </div>
+
+      <!-- Visa Intel Chips -->
+      <div class="detail-visa-intel">
+        ${job.soc_code ? `<span class="visa-intel-chip">SOC <strong>${escapeHtml(job.soc_code)}</strong></span>` : ""}
+        ${salaryNum ? `<span class="visa-intel-chip">Parsed: <strong>\u00a3${salaryNum.toLocaleString()}</strong></span>` : ""}
+        <span class="visa-intel-chip">Threshold: <strong>\u00a341,700</strong></span>
+        ${salaryNum && salaryNum < 41700 ? '<span class="visa-intel-chip" style="background:var(--visa-red-bg);color:var(--visa-red);border-color:#EF9A9A;">\u26a0 Below threshold</span>' : ""}
+        ${salaryNum && salaryNum >= 41700 ? '<span class="visa-intel-chip" style="background:var(--visa-green-bg);color:var(--visa-green);border-color:#C8E6C9;">\u2713 Meets threshold</span>' : ""}
+      </div>
+
       <div class="detail-badges">
         ${job.verified_sponsor
           ? `<span class="badge badge-sponsor">${shieldSvg} Verified UK Sponsor${job.sponsor_rating ? ` (${escapeHtml(job.sponsor_rating)}-rated)` : ""}</span>`
@@ -294,6 +501,35 @@ function buildDetailHtml(job) {
         Apply on ${escapeHtml(job.source)} ${externalSvg}
       </a>
     </div>
+
+    <!-- CRM Section: Status + Notes -->
+    <div class="detail-crm-section">
+      <h4>\u{1F4CB} Application Tracker</h4>
+      <div class="crm-status-row">
+        <span class="crm-status-label">Status:</span>
+        <select class="crm-status-select" onchange="updateJobStatus('${escapeJs(job.id)}', this.value)">
+          <option value="new" ${jobStatus === "new" ? "selected" : ""}>New</option>
+          <option value="to_apply" ${jobStatus === "to_apply" ? "selected" : ""}>To Apply</option>
+          <option value="applied" ${jobStatus === "applied" ? "selected" : ""}>Applied</option>
+          <option value="interviewing" ${jobStatus === "interviewing" ? "selected" : ""}>Interviewing</option>
+          <option value="offer" ${jobStatus === "offer" ? "selected" : ""}>Offer</option>
+          <option value="rejected" ${jobStatus === "rejected" ? "selected" : ""}>Rejected</option>
+          <option value="archived" ${jobStatus === "archived" ? "selected" : ""}>Archived</option>
+        </select>
+      </div>
+      <textarea class="crm-notes-area" placeholder="Add notes about this application..." onblur="updateJobNotes('${escapeJs(job.id)}', this.value)">${escapeHtml(job.notes || "")}</textarea>
+      <div class="crm-notes-saved" id="notesSaved">Saved</div>
+    </div>
+
+    <!-- Outreach Kit -->
+    <div class="outreach-kit">
+      <h4>\u2728 AI Application Kit</h4>
+      <button class="btn-outreach" id="btnOutreach" onclick="generateOutreachKit('${escapeJs(job.id)}')">
+        \u2728 Generate Outreach Kit
+      </button>
+      <div class="outreach-result" id="outreachResult"></div>
+    </div>
+
     <div class="detail-section">
       <h4>Job Description</h4>
       <div class="detail-description">${job.description || "<p>No description available. Click Apply to view the full listing.</p>"}</div>
@@ -359,6 +595,8 @@ function updateActiveFilters() {
   if (state.source !== "all") pills.push(pill(escapeHtml(state.source), "source"));
   if (state.saved === "true") pills.push(pill("Saved Only", "saved"));
   if (state.sponsorOnly === "true") pills.push(pill("Verified Sponsors", "sponsorOnly"));
+  if (state.status !== "all") pills.push(pill(statusLabel(state.status), "status"));
+  if (state.visaConfidence !== "all") pills.push(pill(`${visaConfidenceEmoji(state.visaConfidence)} Visa: ${visaConfidenceLabel(state.visaConfidence)}`, "visaConfidence"));
   $activeFilters.innerHTML = pills.join("");
 }
 
@@ -381,6 +619,8 @@ function clearFilter(key) {
   if (key === "source") { state.source = "all"; $filterSource.value = "all"; }
   if (key === "saved") { state.saved = ""; $filterSaved.checked = false; }
   if (key === "sponsorOnly") { state.sponsorOnly = ""; $filterSponsor.checked = false; }
+  if (key === "status") { state.status = "all"; $filterStatus.value = "all"; }
+  if (key === "visaConfidence") { state.visaConfidence = "all"; $filterVisa.value = "all"; }
   state.page = 1;
   fetchJobs();
 }
@@ -388,12 +628,12 @@ function clearFilter(key) {
 // ---- Escaping ----
 function escapeHtml(str) {
   if (!str) return "";
-  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 function escapeAttr(str) { return escapeHtml(str); }
 function escapeJs(str) {
   if (!str) return "";
-  return str.replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/"/g, '\\"');
+  return String(str).replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/"/g, '\\"');
 }
 
 // ---- Event Listeners ----
@@ -412,6 +652,8 @@ $filterSource.addEventListener("change", () => { state.source = $filterSource.va
 $filterSort.addEventListener("change", () => { state.sort = $filterSort.value; state.page = 1; fetchJobs(); });
 $filterSaved.addEventListener("change", () => { state.saved = $filterSaved.checked ? "true" : ""; state.page = 1; fetchJobs(); });
 $filterSponsor.addEventListener("change", () => { state.sponsorOnly = $filterSponsor.checked ? "true" : ""; state.page = 1; fetchJobs(); });
+$filterStatus.addEventListener("change", () => { state.status = $filterStatus.value; state.page = 1; fetchJobs(); });
+$filterVisa.addEventListener("change", () => { state.visaConfidence = $filterVisa.value; state.page = 1; fetchJobs(); });
 $refreshBtn.addEventListener("click", triggerRefresh);
 
 // Mobile sidebar toggle

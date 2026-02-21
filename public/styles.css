@@ -1,5 +1,5 @@
 /* ============================================================
-   Alexis London ESG Job Board
+   Alexis London ESG Job Board — V3.0
    Visual: LinkedIn (professional structure) x Idealist (mission-driven warmth)
    ============================================================ */
 
@@ -25,9 +25,23 @@
   --score-high: #0D9B82;
   --score-mid: #D4A843;
   --score-low: #C0C0C0;
+  /* V3.0 visa confidence colors */
+  --visa-green: #2E7D32;
+  --visa-green-bg: #E8F5E9;
+  --visa-yellow: #E8A317;
+  --visa-yellow-bg: #FFF8E1;
+  --visa-red: #C62828;
+  --visa-red-bg: #FFEBEE;
+  --status-new: #64748B;
+  --status-to-apply: #0D9B82;
+  --status-applied: #1B6B93;
+  --status-interviewing: #7C3AED;
+  --status-offer: #2E7D32;
+  --status-rejected: #C62828;
+  --status-archived: #9E9E9E;
   --font: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --sidebar-w: 260px;
-  --detail-w: 420px;
+  --detail-w: 460px;
   --navbar-h: 60px;
   --radius: 8px;
   --radius-sm: 6px;
@@ -70,6 +84,7 @@ a:hover { text-decoration: underline; }
 .navbar-brand { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
 .brand-text { font-size: 18px; font-weight: 700; color: var(--text-primary); }
 .brand-accent { color: var(--primary); }
+.brand-version { font-size: 11px; font-weight: 600; color: var(--text-muted); background: var(--bg); padding: 1px 6px; border-radius: 8px; vertical-align: super; }
 
 .navbar-search { flex: 1; max-width: 520px; position: relative; }
 .search-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-muted); }
@@ -140,6 +155,19 @@ a:hover { text-decoration: underline; }
 .filter-toggle input:checked + .toggle-slider { background: var(--primary); }
 .filter-toggle input:checked + .toggle-slider::after { transform: translateX(16px); }
 
+/* Visa Intelligence summary in sidebar */
+.sidebar-visa-intel { background: #FAFAF8; padding: 14px; border-radius: var(--radius); border: 1px solid var(--border-light); }
+.visa-summary-grid { display: flex; gap: 8px; margin-bottom: 10px; }
+.visa-summary-item { display: flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; padding: 4px 8px; border-radius: 6px; }
+.visa-summary-item.visa-green { background: var(--visa-green-bg); color: var(--visa-green); }
+.visa-summary-item.visa-yellow { background: var(--visa-yellow-bg); color: var(--visa-yellow); }
+.visa-summary-item.visa-red { background: var(--visa-red-bg); color: var(--visa-red); }
+.visa-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.visa-dot.green { background: var(--visa-green); }
+.visa-dot.yellow { background: var(--visa-yellow); }
+.visa-dot.red { background: var(--visa-red); }
+.visa-threshold-note { font-size: 11px; color: var(--text-muted); }
+
 .sidebar-info p { font-size: 13px; color: var(--text-secondary); line-height: 1.6; margin-bottom: 8px; }
 .info-meta { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
 .quick-links { display: flex; flex-direction: column; gap: 8px; }
@@ -205,6 +233,28 @@ a:hover { text-decoration: underline; }
 .badge-tag { background: var(--primary-light); color: var(--primary-dark); }
 .badge-sponsor { background: var(--sponsor-light); color: var(--sponsor-badge); }
 
+/* V3.0 Visa Confidence Badge on cards */
+.badge-visa-green { background: var(--visa-green-bg); color: var(--visa-green); }
+.badge-visa-yellow { background: var(--visa-yellow-bg); color: var(--visa-yellow); }
+.badge-visa-red { background: var(--visa-red-bg); color: var(--visa-red); }
+
+/* V3.0 Status Badge on cards */
+.badge-status { font-size: 10px; padding: 2px 7px; border-radius: 10px; }
+.badge-status-new { background: #F1F5F9; color: var(--status-new); }
+.badge-status-to_apply { background: var(--primary-light); color: var(--status-to-apply); }
+.badge-status-applied { background: var(--accent-light); color: var(--status-applied); }
+.badge-status-interviewing { background: #F3E8FF; color: var(--status-interviewing); }
+.badge-status-offer { background: var(--visa-green-bg); color: var(--status-offer); }
+.badge-status-rejected { background: var(--visa-red-bg); color: var(--status-rejected); }
+.badge-status-archived { background: #F5F5F5; color: var(--status-archived); }
+
+/* V3.0 Success Probability bar on cards */
+.job-probability-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.probability-label { font-size: 11px; color: var(--text-muted); white-space: nowrap; }
+.probability-bar { flex: 1; height: 6px; background: var(--border-light); border-radius: 3px; overflow: hidden; }
+.probability-fill { height: 100%; border-radius: 3px; transition: width 0.4s ease; }
+.probability-value { font-size: 11px; font-weight: 700; min-width: 28px; text-align: right; }
+
 /* AI Summary snippet on card */
 .job-summary {
   margin-top: 8px; padding: 8px 10px; background: #F9F9F7;
@@ -224,6 +274,27 @@ a:hover { text-decoration: underline; }
 }
 .detail-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; gap: 12px; color: var(--text-muted); font-size: 14px; }
 .detail-content { padding: 24px; }
+
+/* V3.0 Visa Confidence Traffic Light in detail */
+.visa-traffic-light { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: var(--radius); margin-bottom: 16px; }
+.visa-traffic-light.green { background: var(--visa-green-bg); border: 1px solid #C8E6C9; }
+.visa-traffic-light.yellow { background: var(--visa-yellow-bg); border: 1px solid #FFE082; }
+.visa-traffic-light.red { background: var(--visa-red-bg); border: 1px solid #EF9A9A; }
+.visa-traffic-light.unknown { background: #F5F5F5; border: 1px solid var(--border); }
+.visa-traffic-icon { font-size: 22px; flex-shrink: 0; }
+.visa-traffic-text { font-size: 13px; line-height: 1.4; }
+.visa-traffic-text strong { display: block; font-size: 14px; margin-bottom: 2px; }
+.visa-traffic-text.green strong { color: var(--visa-green); }
+.visa-traffic-text.yellow strong { color: var(--visa-yellow); }
+.visa-traffic-text.red strong { color: var(--visa-red); }
+
+/* V3.0 Success Probability bar in detail */
+.detail-probability { margin-bottom: 16px; }
+.detail-probability-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.detail-probability-label { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; color: var(--text-muted); }
+.detail-probability-value { font-size: 18px; font-weight: 700; }
+.detail-probability-bar { height: 10px; background: var(--border-light); border-radius: 5px; overflow: hidden; }
+.detail-probability-fill { height: 100%; border-radius: 5px; transition: width 0.5s ease; }
 
 .detail-score-row { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; }
 .detail-score-ring { width: 56px; height: 56px; position: relative; }
@@ -249,6 +320,54 @@ a:hover { text-decoration: underline; }
 }
 .detail-ai-summary strong { color: var(--primary-dark); font-size: 12px; text-transform: uppercase; letter-spacing: 0.3px; display: block; margin-bottom: 4px; }
 
+/* V3.0 CRM: Status Dropdown & Notes in detail */
+.detail-crm-section { margin-bottom: 20px; padding: 16px; background: #FAFAF8; border-radius: var(--radius); border: 1px solid var(--border-light); }
+.detail-crm-section h4 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; color: var(--text-muted); margin-bottom: 10px; }
+
+.crm-status-row { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.crm-status-label { font-size: 13px; font-weight: 500; color: var(--text-secondary); white-space: nowrap; }
+.crm-status-select {
+  flex: 1; padding: 7px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+  font-size: 13px; font-family: var(--font); background: var(--surface); cursor: pointer; outline: none;
+}
+.crm-status-select:focus { border-color: var(--primary); }
+
+.crm-notes-area {
+  width: 100%; min-height: 60px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+  font-size: 13px; font-family: var(--font); line-height: 1.5; resize: vertical; outline: none; background: var(--surface);
+}
+.crm-notes-area:focus { border-color: var(--primary); }
+.crm-notes-saved { font-size: 11px; color: var(--primary); margin-top: 4px; opacity: 0; transition: opacity 0.3s; }
+.crm-notes-saved.show { opacity: 1; }
+
+/* V3.0 Outreach Kit section */
+.outreach-kit { margin-bottom: 20px; }
+.outreach-kit h4 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; color: var(--text-muted); margin-bottom: 10px; }
+.btn-outreach {
+  display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px;
+  background: var(--accent); color: white; border: none; border-radius: var(--radius-sm);
+  font-size: 13px; font-weight: 600; font-family: var(--font); cursor: pointer; transition: background 0.2s;
+}
+.btn-outreach:hover { background: #155d7a; }
+.btn-outreach:disabled { opacity: 0.6; cursor: not-allowed; }
+.btn-outreach.loading { opacity: 0.7; }
+
+.outreach-result { margin-top: 12px; }
+.outreach-block { margin-bottom: 14px; }
+.outreach-block-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; color: var(--text-muted); margin-bottom: 4px; }
+.outreach-block-content {
+  padding: 10px 12px; background: var(--surface); border: 1px solid var(--border-light); border-radius: var(--radius-sm);
+  font-size: 13px; line-height: 1.6; color: var(--text-secondary); white-space: pre-wrap;
+}
+.outreach-block-content ul { padding-left: 18px; margin: 4px 0; }
+.outreach-block-content li { margin-bottom: 4px; }
+.btn-copy {
+  margin-top: 4px; padding: 4px 10px; background: none; border: 1px solid var(--border);
+  border-radius: 4px; font-size: 11px; font-family: var(--font); color: var(--text-muted);
+  cursor: pointer; transition: all 0.15s;
+}
+.btn-copy:hover { border-color: var(--primary); color: var(--primary); }
+
 .detail-apply {
   display: inline-flex; align-items: center; gap: 8px; padding: 10px 24px;
   background: var(--primary); color: white; border: none; border-radius: var(--radius-sm);
@@ -263,6 +382,15 @@ a:hover { text-decoration: underline; }
 .detail-description ul, .detail-description ol { padding-left: 20px; margin: 8px 0; }
 .detail-description li { margin-bottom: 4px; }
 .detail-description p { margin-bottom: 8px; }
+
+/* V3.0 SOC / Salary info row */
+.detail-visa-intel { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.visa-intel-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 500;
+  background: #F5F5F5; color: var(--text-secondary); border: 1px solid var(--border-light);
+}
+.visa-intel-chip strong { font-weight: 700; color: var(--text-primary); }
 
 /* ---- Pagination ---- */
 .pagination { display: flex; align-items: center; justify-content: center; gap: 4px; margin-top: 24px; padding-bottom: 40px; }
@@ -355,6 +483,11 @@ a:hover { text-decoration: underline; }
   .page-btn { padding: 6px 10px; font-size: 12px; }
 
   .mobile-filter-toggle { bottom: 16px; padding: 8px 16px; font-size: 13px; }
+
+  .visa-traffic-light { padding: 10px; }
+  .visa-traffic-icon { font-size: 18px; }
+  .visa-traffic-text { font-size: 12px; }
+  .detail-crm-section { padding: 12px; }
 }
 
 /* Very small phone */
@@ -363,4 +496,5 @@ a:hover { text-decoration: underline; }
   .score-ring { width: 34px; height: 34px; }
   .job-logo { display: none; }
   .navbar-actions { gap: 6px; }
+  .job-probability-row { display: none; }
 }

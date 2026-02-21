@@ -4,6 +4,7 @@ const cron = require("node-cron");
 const db = require("./db");
 const { fetchAllJobs } = require("./fetcher");
 const { sendDailyDigest } = require("./mailer");
+const { generateOutreachKit, SOC_GOING_RATES, GENERAL_THRESHOLD } = require("./scorer");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -28,7 +29,7 @@ app.use(express.json());
 // Get jobs with search/filter/pagination
 app.get("/api/jobs", (req, res) => {
   try {
-    const { search, source, remote, saved, sponsorOnly, sort, page, limit } = req.query;
+    const { search, source, remote, saved, sponsorOnly, sort, page, limit, status, visaConfidence } = req.query;
     const result = db.getJobs({
       search,
       source,
@@ -38,6 +39,8 @@ app.get("/api/jobs", (req, res) => {
       sort: sort || "score",
       page: parseInt(page) || 1,
       limit: parseInt(limit) || 20,
+      status,
+      visaConfidence,
     });
     res.json(result);
   } catch (err) {
@@ -80,6 +83,56 @@ app.post("/api/refresh", async (req, res) => {
   }
 });
 
+// ---- V3.0: CRM Endpoints ----
+
+// Update job application status
+app.post("/api/jobs/:id/status", (req, res) => {
+  try {
+    const { status } = req.body;
+    if (!status) return res.status(400).json({ error: "status is required" });
+    const updated = db.updateStatus(req.params.id, status);
+    if (updated === null) return res.status(404).json({ error: "Job not found" });
+    res.json({ status: updated });
+  } catch (err) {
+    console.error("POST /api/jobs/:id/status error:", err);
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Update job notes
+app.post("/api/jobs/:id/notes", (req, res) => {
+  try {
+    const { notes } = req.body;
+    const updated = db.updateNotes(req.params.id, notes || "");
+    if (updated === null) return res.status(404).json({ error: "Job not found" });
+    res.json({ notes: updated });
+  } catch (err) {
+    console.error("POST /api/jobs/:id/notes error:", err);
+    res.status(500).json({ error: "Failed to update notes" });
+  }
+});
+
+// Generate AI outreach kit for a job
+app.post("/api/jobs/:id/outreach-kit", async (req, res) => {
+  try {
+    const job = db.getJobById(req.params.id);
+    if (!job) return res.status(404).json({ error: "Job not found" });
+    const kit = await generateOutreachKit(job, config.anthropicKey);
+    res.json(kit);
+  } catch (err) {
+    console.error("POST /api/jobs/:id/outreach-kit error:", err);
+    res.status(500).json({ error: "Failed to generate outreach kit" });
+  }
+});
+
+// Get visa intelligence data (SOC rates, thresholds)
+app.get("/api/visa-intel", (req, res) => {
+  res.json({
+    generalThreshold: GENERAL_THRESHOLD,
+    socRates: SOC_GOING_RATES,
+  });
+});
+
 // ---- Daily Scheduled Fetch (6:00 AM London time) ----
 cron.schedule("0 6 * * *", async () => {
   console.log(`\n[CRON] Daily fetch at ${new Date().toISOString()}`);
@@ -96,7 +149,7 @@ cron.schedule("0 6 * * *", async () => {
 
 // ---- Start Server ----
 app.listen(PORT, async () => {
-  console.log(`\n  Alexis London ESG Job Board running at http://localhost:${PORT}\n`);
+  console.log(`\n  Alexis London ESG Job Board V3.0 running at http://localhost:${PORT}\n`);
 
   // Fetch jobs on first startup if database is empty
   const stats = db.getStats();

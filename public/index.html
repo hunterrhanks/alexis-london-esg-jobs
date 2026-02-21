@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Alexis London ESG Jobs</title>
+  <title>Alexis London ESG Jobs — V3.0</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -20,7 +20,7 @@
             <path d="M8 14.5L12 18.5L20 10.5" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
         </div>
-        <span class="brand-text">Alexis <span class="brand-accent">London ESG</span></span>
+        <span class="brand-text">Alexis <span class="brand-accent">London ESG</span> <span class="brand-version">v3</span></span>
       </div>
       <div class="navbar-search">
         <svg class="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -82,9 +82,35 @@
           <label class="filter-label">Sort By</label>
           <select id="filterSort" class="filter-select">
             <option value="score">Match Score</option>
+            <option value="probability">Success Probability</option>
+            <option value="visa">Visa Confidence</option>
             <option value="date">Most Recent</option>
             <option value="company">Company A-Z</option>
             <option value="title">Title A-Z</option>
+          </select>
+        </div>
+
+        <div class="filter-group">
+          <label class="filter-label">Application Status</label>
+          <select id="filterStatus" class="filter-select">
+            <option value="all">All Statuses</option>
+            <option value="new">New</option>
+            <option value="to_apply">To Apply</option>
+            <option value="applied">Applied</option>
+            <option value="interviewing">Interviewing</option>
+            <option value="offer">Offer</option>
+            <option value="rejected">Rejected</option>
+            <option value="archived">Archived</option>
+          </select>
+        </div>
+
+        <div class="filter-group">
+          <label class="filter-label">Visa Confidence</label>
+          <select id="filterVisa" class="filter-select">
+            <option value="all">All Levels</option>
+            <option value="green">🟢 High</option>
+            <option value="yellow">🟡 Medium</option>
+            <option value="red">🔴 Low</option>
           </select>
         </div>
 
@@ -103,6 +129,26 @@
             <span>Saved Jobs Only</span>
           </label>
         </div>
+      </div>
+
+      <!-- Visa Intelligence Summary -->
+      <div class="sidebar-section sidebar-visa-intel">
+        <h3 class="sidebar-heading">🛂 Visa Intelligence</h3>
+        <div class="visa-summary-grid">
+          <div class="visa-summary-item visa-green">
+            <span class="visa-dot green"></span>
+            <span id="visaGreenCount">0</span> High
+          </div>
+          <div class="visa-summary-item visa-yellow">
+            <span class="visa-dot yellow"></span>
+            <span id="visaYellowCount">0</span> Medium
+          </div>
+          <div class="visa-summary-item visa-red">
+            <span class="visa-dot red"></span>
+            <span id="visaRedCount">0</span> Low
+          </div>
+        </div>
+        <p class="visa-threshold-note">2026 Skilled Worker threshold: <strong>£41,700</strong></p>
       </div>
 
       <div class="sidebar-section sidebar-info">
@@ -124,6 +170,10 @@
           <a href="https://www.gov.uk/skilled-worker-visa" target="_blank" rel="noopener" class="quick-link">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
             Skilled Worker Visa Info
+          </a>
+          <a href="https://www.gov.uk/government/publications/skilled-worker-visa-going-rates-for-eligible-occupations" target="_blank" rel="noopener" class="quick-link">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+            SOC Going Rates
           </a>
         </div>
       </div>

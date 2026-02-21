@@ -61,6 +61,13 @@ function initialize() {
     ["match_score", "ALTER TABLE jobs ADD COLUMN match_score INTEGER DEFAULT 0"],
     ["ai_summary", "ALTER TABLE jobs ADD COLUMN ai_summary TEXT"],
     ["role_priority", "ALTER TABLE jobs ADD COLUMN role_priority INTEGER DEFAULT 0"],
+    // V3.0 migrations
+    ["status", "ALTER TABLE jobs ADD COLUMN status TEXT DEFAULT 'new'"],
+    ["notes", "ALTER TABLE jobs ADD COLUMN notes TEXT"],
+    ["soc_code", "ALTER TABLE jobs ADD COLUMN soc_code TEXT"],
+    ["salary_num", "ALTER TABLE jobs ADD COLUMN salary_num INTEGER"],
+    ["visa_confidence", "ALTER TABLE jobs ADD COLUMN visa_confidence TEXT DEFAULT 'unknown'"],
+    ["success_probability", "ALTER TABLE jobs ADD COLUMN success_probability INTEGER DEFAULT 0"],
   ];
   for (const [col, sql] of migrations) {
     if (!columns.includes(col)) {
@@ -84,12 +91,16 @@ function upsertJobs(jobs) {
       id, title, company, location, description, url, source, tags,
       job_type, remote, visa_sponsorship, salary, company_logo,
       posted_at, fetched_at, verified_sponsor, sponsor_rating,
-      match_score, ai_summary, role_priority
+      match_score, ai_summary, role_priority,
+      status, notes, soc_code, salary_num, visa_confidence, success_probability
     ) VALUES (
       @id, @title, @company, @location, @description, @url, @source, @tags,
       @job_type, @remote, @visa_sponsorship, @salary, @company_logo,
       @posted_at, @fetched_at, @verified_sponsor, @sponsor_rating,
-      @match_score, @ai_summary, @role_priority
+      @match_score, @ai_summary, @role_priority,
+      COALESCE((SELECT status FROM jobs WHERE id = @id), @status),
+      COALESCE((SELECT notes FROM jobs WHERE id = @id), @notes),
+      @soc_code, @salary_num, @visa_confidence, @success_probability
     )
   `);
 
@@ -116,6 +127,12 @@ function upsertJobs(jobs) {
         match_score: row.match_score || 0,
         ai_summary: row.ai_summary || null,
         role_priority: row.role_priority || 0,
+        status: row.status || "new",
+        notes: row.notes || null,
+        soc_code: row.soc_code || null,
+        salary_num: row.salary_num || null,
+        visa_confidence: row.visa_confidence || "unknown",
+        success_probability: row.success_probability || 0,
       });
     }
   });
@@ -125,7 +142,7 @@ function upsertJobs(jobs) {
   return jobs.length;
 }
 
-function getJobs({ search, source, remote, saved, sponsorOnly, sort, page, limit }) {
+function getJobs({ search, source, remote, saved, sponsorOnly, sort, page, limit, status, visaConfidence }) {
   const db = getDb();
   const conditions = [];
   const params = {};
@@ -152,6 +169,16 @@ function getJobs({ search, source, remote, saved, sponsorOnly, sort, page, limit
     conditions.push("verified_sponsor = 1");
   }
 
+  if (status && status !== "all") {
+    conditions.push("status = @status");
+    params.status = status;
+  }
+
+  if (visaConfidence && visaConfidence !== "all") {
+    conditions.push("visa_confidence = @visaConfidence");
+    params.visaConfidence = visaConfidence;
+  }
+
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
 
   let orderBy = "match_score DESC, posted_at DESC"; // default: sort by score
@@ -159,6 +186,8 @@ function getJobs({ search, source, remote, saved, sponsorOnly, sort, page, limit
   if (sort === "company") orderBy = "company ASC";
   if (sort === "title") orderBy = "title ASC";
   if (sort === "score") orderBy = "match_score DESC, posted_at DESC";
+  if (sort === "visa") orderBy = "visa_confidence ASC, match_score DESC";
+  if (sort === "probability") orderBy = "success_probability DESC, match_score DESC";
 
   const offset = ((page || 1) - 1) * (limit || 20);
   const lim = limit || 20;
@@ -180,17 +209,6 @@ function toggleSave(jobId) {
   const row = db.prepare("SELECT saved FROM jobs WHERE id = @id").get({ id: jobId });
   db.close();
   return row ? row.saved : 0;
-}
-
-function getStats() {
-  const db = getDb();
-  const total = db.prepare("SELECT COUNT(*) as c FROM jobs").get().c;
-  const sources = db.prepare("SELECT source, COUNT(*) as c FROM jobs GROUP BY source").all();
-  const lastFetch = db.prepare("SELECT * FROM fetch_log ORDER BY fetched_at DESC LIMIT 1").get();
-  const verifiedCount = db.prepare("SELECT COUNT(*) as c FROM jobs WHERE verified_sponsor = 1").get().c;
-  const avgScore = db.prepare("SELECT ROUND(AVG(match_score)) as avg FROM jobs WHERE match_score > 0").get().avg || 0;
-  db.close();
-  return { total, sources, lastFetch, verifiedCount, avgScore };
 }
 
 /**
@@ -221,4 +239,53 @@ function logFetch(source, jobCount, status) {
   db.close();
 }
 
-module.exports = { initialize, upsertJobs, getJobs, toggleSave, getStats, getTopNewJobs, logFetch };
+// ---- V3.0: CRM Functions ----
+
+const VALID_STATUSES = ["new", "to_apply", "applied", "interviewing", "offer", "rejected", "archived"];
+
+function updateStatus(jobId, status) {
+  if (!VALID_STATUSES.includes(status)) {
+    throw new Error(`Invalid status: ${status}. Must be one of: ${VALID_STATUSES.join(", ")}`);
+  }
+  const db = getDb();
+  db.prepare("UPDATE jobs SET status = @status WHERE id = @id").run({ id: jobId, status });
+  const row = db.prepare("SELECT status FROM jobs WHERE id = @id").get({ id: jobId });
+  db.close();
+  return row ? row.status : null;
+}
+
+function updateNotes(jobId, notes) {
+  const db = getDb();
+  db.prepare("UPDATE jobs SET notes = @notes WHERE id = @id").run({ id: jobId, notes });
+  const row = db.prepare("SELECT notes FROM jobs WHERE id = @id").get({ id: jobId });
+  db.close();
+  return row ? row.notes : null;
+}
+
+function getJobById(jobId) {
+  const db = getDb();
+  const row = db.prepare("SELECT * FROM jobs WHERE id = @id").get({ id: jobId });
+  db.close();
+  return row || null;
+}
+
+function getStats() {
+  const db = getDb();
+  const total = db.prepare("SELECT COUNT(*) as c FROM jobs").get().c;
+  const sources = db.prepare("SELECT source, COUNT(*) as c FROM jobs GROUP BY source").all();
+  const lastFetch = db.prepare("SELECT * FROM fetch_log ORDER BY fetched_at DESC LIMIT 1").get();
+  const verifiedCount = db.prepare("SELECT COUNT(*) as c FROM jobs WHERE verified_sponsor = 1").get().c;
+  const avgScore = db.prepare("SELECT ROUND(AVG(match_score)) as avg FROM jobs WHERE match_score > 0").get().avg || 0;
+  // V3.0 stats
+  const statusCounts = db.prepare("SELECT status, COUNT(*) as c FROM jobs GROUP BY status").all();
+  const visaGreen = db.prepare("SELECT COUNT(*) as c FROM jobs WHERE visa_confidence = 'green'").get().c;
+  const visaYellow = db.prepare("SELECT COUNT(*) as c FROM jobs WHERE visa_confidence = 'yellow'").get().c;
+  const visaRed = db.prepare("SELECT COUNT(*) as c FROM jobs WHERE visa_confidence = 'red'").get().c;
+  db.close();
+  return { total, sources, lastFetch, verifiedCount, avgScore, statusCounts, visaGreen, visaYellow, visaRed };
+}
+
+module.exports = {
+  initialize, upsertJobs, getJobs, toggleSave, getStats, getTopNewJobs, logFetch,
+  updateStatus, updateNotes, getJobById, VALID_STATUSES,
+};
