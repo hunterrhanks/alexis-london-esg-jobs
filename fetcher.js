@@ -448,6 +448,233 @@ async function fetchGreenJobsRSS() {
 }
 
 // ---------------------------------------------------------------------------
+// Source 7: Jooble (aggregator — indexes LinkedIn, Indeed, Glassdoor & 70+ boards)
+//   Requires free API key from https://jooble.org/api/about
+// ---------------------------------------------------------------------------
+async function fetchJooble(apiKey) {
+  if (!apiKey) {
+    console.log("  [Jooble] Skipped - no API key configured (get one free at jooble.org/api/about)");
+    return [];
+  }
+
+  const searches = [
+    { keywords: "sustainability consultant", location: "London" },
+    { keywords: "ESG analyst", location: "London" },
+    { keywords: "ESG consultant", location: "London" },
+    { keywords: "sustainability analyst", location: "London" },
+    { keywords: "climate consulting", location: "London" },
+    { keywords: "environmental consultant", location: "London" },
+    { keywords: "sustainability manager", location: "United Kingdom" },
+    { keywords: "ESG advisory", location: "United Kingdom" },
+  ];
+
+  const seen = new Set();
+  const jobs = [];
+
+  for (const search of searches) {
+    console.log(`  [Jooble] Searching "${search.keywords}" in ${search.location}...`);
+    const url = `https://jooble.org/api/${apiKey}`;
+
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          keywords: search.keywords,
+          location: search.location,
+          page: 1,
+          ResultOnPage: 50,
+        }),
+      });
+
+      if (!res.ok) {
+        console.error(`  [Jooble] HTTP ${res.status} for "${search.keywords}"`);
+        continue;
+      }
+
+      const data = await res.json();
+
+      for (const job of data.jobs || []) {
+        const jobKey = job.id || hashString(job.link || job.title + job.company);
+        if (seen.has(jobKey)) continue;
+        seen.add(jobKey);
+
+        const loc = (job.location || "").toLowerCase();
+        const isLondon = loc.includes("london");
+        const isUK = loc.includes("uk") || loc.includes("united kingdom") || loc.includes("england");
+        const isRemote = loc.includes("remote");
+
+        // Jooble aggregates broadly — ESG-filter the broader queries
+        if (!isLondon && !isUK && !isRemote) continue;
+
+        const title = (job.title || "").replace(/<[^>]*>/g, "").trim();
+        const snippet = (job.snippet || "").replace(/<[^>]*>/g, "").trim();
+
+        jobs.push(enrichJob({
+          id: `jooble-${jobKey}`,
+          title,
+          company: job.company || "See listing",
+          location: job.location || search.location,
+          description: snippet,
+          url: job.link || "",
+          source: "Jooble",
+          tags: "",
+          job_type: job.type || "",
+          remote: isRemote ? 1 : 0,
+          visa_sponsorship: 0,
+          salary: job.salary || null,
+          company_logo: null,
+          posted_at: job.updated || NOW(),
+          fetched_at: NOW(),
+        }));
+      }
+
+      console.log(`  [Jooble] "${search.keywords}": ${(data.jobs || []).length} raw → ${jobs.length} total kept`);
+    } catch (err) {
+      console.error(`  [Jooble] Error for "${search.keywords}":`, err.message);
+    }
+
+    await sleep(1500);
+  }
+
+  return jobs;
+}
+
+// ---------------------------------------------------------------------------
+// Source 8: The Muse (professional/consulting roles, strong brand coverage)
+//   Free API — no key required (500 req/hr), optional key for 3600 req/hr
+// ---------------------------------------------------------------------------
+async function fetchMuse(apiKey) {
+  // The Muse has no ESG/sustainability category, so we fetch from relevant
+  // categories in London, then keyword-filter for ESG relevance
+  const categories = [
+    "Business Operations",
+    "Science and Engineering",
+    "Data and Analytics",
+    "Management",
+    "Corporate",
+    "Project Management",
+  ];
+
+  const seen = new Set();
+  const jobs = [];
+
+  // Strategy 1: Fetch London jobs from each category
+  for (const category of categories) {
+    const params = new URLSearchParams({
+      page: "0",
+      location: "London, United Kingdom",
+      category: category,
+    });
+    if (apiKey) params.set("api_key", apiKey);
+
+    console.log(`  [Muse] Fetching "${category}" in London...`);
+    const url = `https://www.themuse.com/api/public/jobs?${params}`;
+
+    try {
+      const res = await fetch(url);
+      if (!res.ok) {
+        console.error(`  [Muse] HTTP ${res.status} for "${category}"`);
+        continue;
+      }
+      const data = await res.json();
+
+      for (const job of data.results || []) {
+        if (seen.has(job.id)) continue;
+        seen.add(job.id);
+
+        const title = job.name || "";
+        const desc = job.contents || "";
+        const company = job.company ? job.company.name : "Unknown";
+        const catNames = (job.categories || []).map(c => c.name).join(", ");
+        const locations = (job.locations || []).map(l => l.name).join(", ");
+
+        // ESG relevance filter — The Muse has a lot of non-ESG roles
+        if (!isESGRelated(title, desc, catNames)) continue;
+
+        jobs.push(enrichJob({
+          id: `muse-${job.id}`,
+          title,
+          company,
+          location: locations || "London, United Kingdom",
+          description: desc,
+          url: (job.refs && job.refs.landing_page) || "",
+          source: "The Muse",
+          tags: catNames,
+          job_type: (job.levels || []).map(l => l.name).join(", "),
+          remote: locations.toLowerCase().includes("remote") ? 1 : 0,
+          visa_sponsorship: 0,
+          salary: null,
+          company_logo: null,
+          posted_at: job.publication_date || NOW(),
+          fetched_at: NOW(),
+        }));
+      }
+    } catch (err) {
+      console.error(`  [Muse] Error for "${category}":`, err.message);
+    }
+
+    await sleep(1200);
+  }
+
+  // Strategy 2: Also fetch "Flexible / Remote" location for broader reach
+  for (const category of ["Business Operations", "Science and Engineering", "Management"]) {
+    const params = new URLSearchParams({
+      page: "0",
+      location: "Flexible / Remote",
+      category: category,
+    });
+    if (apiKey) params.set("api_key", apiKey);
+
+    console.log(`  [Muse] Fetching "${category}" remote...`);
+    const url = `https://www.themuse.com/api/public/jobs?${params}`;
+
+    try {
+      const res = await fetch(url);
+      if (!res.ok) continue;
+      const data = await res.json();
+
+      for (const job of data.results || []) {
+        if (seen.has(job.id)) continue;
+        seen.add(job.id);
+
+        const title = job.name || "";
+        const desc = job.contents || "";
+        const company = job.company ? job.company.name : "Unknown";
+        const catNames = (job.categories || []).map(c => c.name).join(", ");
+        const locations = (job.locations || []).map(l => l.name).join(", ");
+
+        if (!isESGRelated(title, desc, catNames)) continue;
+
+        jobs.push(enrichJob({
+          id: `muse-${job.id}`,
+          title,
+          company,
+          location: locations || "Remote",
+          description: desc,
+          url: (job.refs && job.refs.landing_page) || "",
+          source: "The Muse",
+          tags: catNames,
+          job_type: (job.levels || []).map(l => l.name).join(", "),
+          remote: 1,
+          visa_sponsorship: 0,
+          salary: null,
+          company_logo: null,
+          posted_at: job.publication_date || NOW(),
+          fetched_at: NOW(),
+        }));
+      }
+    } catch (err) {
+      console.error(`  [Muse] Error remote "${category}":`, err.message);
+    }
+
+    await sleep(1200);
+  }
+
+  return jobs;
+}
+
+// ---------------------------------------------------------------------------
 // Master fetch - runs all sources, then scores
 // ---------------------------------------------------------------------------
 async function fetchAllJobs(config = {}) {
@@ -464,6 +691,8 @@ async function fetchAllJobs(config = {}) {
     { name: "Jobicy", fn: () => fetchJobicy() },
     { name: "Arbeitnow", fn: () => fetchArbeitnow() },
     { name: "GreenJobs", fn: () => fetchGreenJobsRSS() },
+    { name: "Jooble", fn: () => fetchJooble(config.joobleApiKey) },
+    { name: "The Muse", fn: () => fetchMuse(config.museApiKey) },
     { name: "Remotive", fn: () => fetchRemotive() },
     { name: "Reed", fn: () => fetchReed(config.reedApiKey) },
     { name: "Adzuna", fn: () => fetchAdzuna(config.adzunaAppId, config.adzunaAppKey) },

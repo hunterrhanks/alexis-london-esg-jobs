@@ -15,6 +15,8 @@ const config = {
   adzunaAppId: process.env.ADZUNA_APP_ID || null,
   adzunaAppKey: process.env.ADZUNA_APP_KEY || null,
   anthropicKey: process.env.ANTHROPIC_API_KEY || null,
+  joobleApiKey: process.env.JOOBLE_API_KEY || null,
+  museApiKey: process.env.MUSE_API_KEY || null,
 };
 
 // Initialize database
