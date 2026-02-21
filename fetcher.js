@@ -80,15 +80,16 @@ function isMuseESGRelevant(title, description, tags) {
 }
 
 /**
- * Jooble-specific ESG filter — Jooble snippets are very short (1-2 sentences)
- * so the standard filter misses results where ESG context is in the full listing.
- * Since Jooble searches are ESG-targeted, we trust the search + verify the role
- * title looks like a plausible ESG/consulting/comms position.
+ * Search-based ESG filter — used for Jooble, Reed, Adzuna and other sources
+ * where search queries are ESG-targeted but API snippets/descriptions may be
+ * too short for the standard isESGRelated() check.
+ * We trust the search context + verify the role title looks like a plausible
+ * ESG/consulting/comms position.
  */
-// ESG-relevant role words for Jooble trust filter — narrow to consulting/comms/ESG titles
+// ESG-relevant role words — narrow to consulting/comms/ESG titles
 const ESG_ROLE_WORDS = /consultant|consult|advisor|advisory|analyst|communicat|report|strateg|sustainab|esg|climate|carbon|environment|csr|planner|engagement/i;
 
-function isJoobleESGRelevant(title, snippet, searchKeywords) {
+function isSearchESGRelevant(title, snippet, searchKeywords) {
   // Rule 1: Title or snippet has a strong ESG keyword → always pass
   if (isESGRelated(title, snippet, "")) return true;
 
@@ -348,16 +349,19 @@ async function fetchArbeitnow() {
 // ---------------------------------------------------------------------------
 async function fetchReed(apiKey) {
   if (!apiKey) {
-    console.log("  [Reed] Skipped - no API key configured");
+    console.log("  [Reed] Skipped - no API key configured (get one free at reed.co.uk/developers)");
     return [];
   }
 
-  // Prioritised searches
+  // Prioritised searches — ESG consulting + communications focus
   const searches = [
     "sustainability consultant", "esg analyst",
     "esg consultant", "sustainability analyst",
     "climate consulting", "environmental consultant",
     "esg advisory", "sustainability manager",
+    "sustainability communications", "ESG communications",
+    "sustainability reporting", "CSR communications",
+    "carbon consultant", "net zero consultant",
   ];
   const seen = new Set();
   const jobs = [];
@@ -370,19 +374,29 @@ async function fetchReed(apiKey) {
       const res = await fetch(url, {
         headers: { Authorization: `Basic ${Buffer.from(apiKey + ":").toString("base64")}` },
       });
-      if (!res.ok) continue;
+      if (!res.ok) {
+        console.error(`  [Reed] HTTP ${res.status} for "${query}"`);
+        continue;
+      }
       const data = await res.json();
 
       for (const job of data.results || []) {
         if (seen.has(job.jobId)) continue;
         seen.add(job.jobId);
 
+        const title = job.jobTitle || "";
+        const desc = job.jobDescription || "";
+
+        // ESG relevance check — searches are targeted but Reed can return
+        // broad matches (e.g. "consultant" matching non-ESG consulting roles)
+        if (!isSearchESGRelevant(title, desc, query)) continue;
+
         jobs.push(enrichJob({
           id: `reed-${job.jobId}`,
-          title: job.jobTitle,
+          title,
           company: job.employerName,
           location: job.locationName || "London",
-          description: job.jobDescription || "",
+          description: desc,
           url: job.jobUrl,
           source: "Reed",
           tags: "",
@@ -395,8 +409,10 @@ async function fetchReed(apiKey) {
           fetched_at: NOW(),
         }));
       }
+
+      console.log(`  [Reed] "${query}": ${(data.results || []).length} raw → ${jobs.length} total kept`);
     } catch (err) {
-      console.error(`  [Reed] Error:`, err.message);
+      console.error(`  [Reed] Error for "${query}":`, err.message);
     }
 
     await sleep(2000);
@@ -410,13 +426,18 @@ async function fetchReed(apiKey) {
 // ---------------------------------------------------------------------------
 async function fetchAdzuna(appId, appKey) {
   if (!appId || !appKey) {
-    console.log("  [Adzuna] Skipped - no API keys configured");
+    console.log("  [Adzuna] Skipped - no API keys configured (get free keys at developer.adzuna.com)");
     return [];
   }
 
+  // Prioritised searches — ESG consulting + communications focus
   const searches = [
     "sustainability consultant", "esg analyst",
+    "esg consultant", "sustainability analyst",
     "esg", "climate consulting", "environmental consultant",
+    "sustainability communications", "ESG communications",
+    "sustainability reporting", "carbon consultant",
+    "CSR consultant", "net zero",
   ];
   const seen = new Set();
   const jobs = [];
@@ -427,22 +448,33 @@ async function fetchAdzuna(appId, appKey) {
 
     try {
       const res = await fetch(url);
-      if (!res.ok) continue;
+      if (!res.ok) {
+        console.error(`  [Adzuna] HTTP ${res.status} for "${query}"`);
+        continue;
+      }
       const data = await res.json();
 
       for (const job of data.results || []) {
         if (seen.has(job.id)) continue;
         seen.add(job.id);
 
+        const title = job.title || "";
+        const desc = job.description || "";
+        const catLabel = job.category ? job.category.label : "";
+
+        // ESG relevance check — searches are targeted but Adzuna can return
+        // broad matches. Use same trust filter as Jooble/Reed.
+        if (!isSearchESGRelevant(title, desc + " " + catLabel, query)) continue;
+
         jobs.push(enrichJob({
           id: `adzuna-${job.id}`,
-          title: job.title,
+          title,
           company: (job.company && job.company.display_name) || "Unknown",
           location: (job.location && job.location.display_name) || "London",
-          description: job.description || "",
+          description: desc,
           url: job.redirect_url,
           source: "Adzuna",
-          tags: job.category ? job.category.label : "",
+          tags: catLabel,
           job_type: job.contract_time || "",
           remote: 0,
           visa_sponsorship: 0,
@@ -452,8 +484,10 @@ async function fetchAdzuna(appId, appKey) {
           fetched_at: NOW(),
         }));
       }
+
+      console.log(`  [Adzuna] "${query}": ${(data.results || []).length} raw → ${jobs.length} total kept`);
     } catch (err) {
-      console.error(`  [Adzuna] Error:`, err.message);
+      console.error(`  [Adzuna] Error for "${query}":`, err.message);
     }
 
     await sleep(1500);
@@ -578,7 +612,7 @@ async function fetchJooble(apiKey) {
 
         // Jooble-specific ESG check: snippets are short so we combine
         // standard ESG check with search-keyword trust for relevant role titles
-        if (!isJoobleESGRelevant(title, snippet, search.keywords)) continue;
+        if (!isSearchESGRelevant(title, snippet, search.keywords)) continue;
 
         jobs.push(enrichJob({
           id: `jooble-${jobKey}`,
