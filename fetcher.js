@@ -8,34 +8,96 @@ const NOW = () => new Date().toISOString();
 const rssParser = new RSSParser();
 
 // ---------------------------------------------------------------------------
-// ESG / sustainability keywords used to filter relevance
+// ESG / sustainability keywords — tiered for precision filtering
 // ---------------------------------------------------------------------------
-const ESG_CORE = [
-  "esg", "sustainability", "sustainable", "climate", "carbon",
-  "net zero", "net-zero", "environment", "environmental",
-  "social impact", "governance", "responsible investment",
-  "impact investing", "green finance", "renewable",
-  "circular economy", "decarbonisation", "decarbonization",
-  "energy transition", "biodiversity", "csr",
-  "corporate social responsibility", "responsible business",
-  "cleantech", "ghg", "emissions",
-  "sdg", "sustainable development", "tcfd", "sfdr",
-  "taxonomy", "double materiality", "scope 1", "scope 2", "scope 3",
-  "csrd", "gri reporting", "sustainability reporting",
-  "esg consulting", "esg advisory", "esg analyst",
-  "sustainability consultant", "climate risk", "climate consulting",
-  "green bond", "sustainable finance",
-  "non-profit", "nonprofit", "ngo", "charity",
-  "social enterprise", "b corp", "purpose-driven",
-  "impact assessment", "stakeholder engagement",
-  "dei", "diversity equity inclusion",
-  "corporate governance", "stewardship",
-  "responsible", "ethical investment", "impact",
+
+// TIER 1: Strongly ESG-specific — a single match anywhere = ESG-relevant
+const ESG_STRONG = [
+  "esg", "sustainability", "sustainable development", "climate change",
+  "carbon", "net zero", "net-zero", "decarbonisation", "decarbonization",
+  "energy transition", "circular economy", "cleantech", "ghg", "emissions",
+  "sdg", "tcfd", "sfdr", "csrd", "gri reporting", "gri standards",
+  "scope 1", "scope 2", "scope 3", "double materiality", "taxonomy regulation",
+  "green bond", "green finance", "sustainable finance",
+  "climate risk", "climate consulting", "climate adaptation", "climate mitigation",
+  "esg consulting", "esg advisory", "esg analyst", "esg reporting",
+  "esg communications", "sustainability communications",
+  "sustainability consultant", "sustainability reporting",
+  "sustainability disclosure", "non-financial reporting", "integrated reporting",
+  "responsible investment", "impact investing",
+  "biodiversity", "nature-based", "just transition",
+  "csr", "corporate social responsibility",
+  "social impact", "impact assessment",
+  "b corp", "science-based targets", "sbti",
+];
+
+// TIER 2: Ambiguous — these appear in non-ESG contexts ("responsible for...", "business impact")
+// Only count if they appear in the TITLE, or if 3+ appear together in the description
+const ESG_WEAK = [
+  "impact", "responsible", "governance", "environmental",
+  "stewardship", "ethical", "purpose-driven", "stakeholder engagement",
+  "renewable", "dei", "diversity equity inclusion",
+  "corporate governance", "responsible business",
+  "non-profit", "nonprofit", "ngo", "charity", "social enterprise",
+  "ethical investment",
 ];
 
 function isESGRelated(title, description, tags) {
-  const text = `${title} ${description} ${tags}`.toLowerCase();
-  return ESG_CORE.some((kw) => text.includes(kw));
+  const titleLower = (title || "").toLowerCase();
+  const allText = `${titleLower} ${(description || "").toLowerCase()} ${(tags || "").toLowerCase()}`;
+
+  // Rule 1: Any STRONG keyword anywhere → relevant
+  if (ESG_STRONG.some((kw) => allText.includes(kw))) return true;
+
+  // Rule 2: A WEAK keyword in the TITLE → relevant (title is intentional)
+  if (ESG_WEAK.some((kw) => titleLower.includes(kw))) return true;
+
+  // Rule 3: 3+ WEAK keywords in the full text → likely ESG context
+  const weakHits = ESG_WEAK.filter((kw) => allText.includes(kw));
+  if (weakHits.length >= 3) return true;
+
+  return false;
+}
+
+/**
+ * Stricter ESG filter for The Muse — this source has high noise because broad
+ * categories ("Business Operations", "Management") return many non-ESG roles.
+ * Require at least one STRONG ESG keyword in title or tags, OR 2+ STRONG in description.
+ */
+function isMuseESGRelevant(title, description, tags) {
+  const titleLower = (title || "").toLowerCase();
+  const tagsLower = (tags || "").toLowerCase();
+  const descLower = (description || "").toLowerCase();
+
+  // Title or tags contain a strong ESG keyword → pass
+  if (ESG_STRONG.some((kw) => titleLower.includes(kw) || tagsLower.includes(kw))) return true;
+
+  // Description has 2+ strong ESG keywords → pass (confirms ESG is core to the role)
+  const strongDescHits = ESG_STRONG.filter((kw) => descLower.includes(kw));
+  if (strongDescHits.length >= 2) return true;
+
+  return false;
+}
+
+/**
+ * Jooble-specific ESG filter — Jooble snippets are very short (1-2 sentences)
+ * so the standard filter misses results where ESG context is in the full listing.
+ * Since Jooble searches are ESG-targeted, we trust the search + verify the role
+ * title looks like a plausible ESG/consulting/comms position.
+ */
+// ESG-relevant role words for Jooble trust filter — narrow to consulting/comms/ESG titles
+const ESG_ROLE_WORDS = /consultant|consult|advisor|advisory|analyst|communicat|report|strateg|sustainab|esg|climate|carbon|environment|csr|planner|engagement/i;
+
+function isJoobleESGRelevant(title, snippet, searchKeywords) {
+  // Rule 1: Title or snippet has a strong ESG keyword → always pass
+  if (isESGRelated(title, snippet, "")) return true;
+
+  // Rule 2: The search was ESG-targeted AND the title contains an ESG-adjacent
+  // role word (consulting, analyst, communications, etc.) → trust the search
+  const searchHasESG = ESG_STRONG.some((kw) => searchKeywords.toLowerCase().includes(kw));
+  if (searchHasESG && ESG_ROLE_WORDS.test(title)) return true;
+
+  return false;
 }
 
 // ---------------------------------------------------------------------------
@@ -464,8 +526,12 @@ async function fetchJooble(apiKey) {
     { keywords: "sustainability analyst", location: "London" },
     { keywords: "climate consulting", location: "London" },
     { keywords: "environmental consultant", location: "London" },
+    { keywords: "sustainability communications", location: "London" },
+    { keywords: "ESG communications", location: "London" },
+    { keywords: "sustainability reporting", location: "London" },
     { keywords: "sustainability manager", location: "United Kingdom" },
     { keywords: "ESG advisory", location: "United Kingdom" },
+    { keywords: "CSR communications", location: "United Kingdom" },
   ];
 
   const seen = new Set();
@@ -504,11 +570,15 @@ async function fetchJooble(apiKey) {
         const isUK = loc.includes("uk") || loc.includes("united kingdom") || loc.includes("england");
         const isRemote = loc.includes("remote");
 
-        // Jooble aggregates broadly — ESG-filter the broader queries
+        // Jooble aggregates broadly — filter by location AND ESG relevance
         if (!isLondon && !isUK && !isRemote) continue;
 
         const title = (job.title || "").replace(/<[^>]*>/g, "").trim();
         const snippet = (job.snippet || "").replace(/<[^>]*>/g, "").trim();
+
+        // Jooble-specific ESG check: snippets are short so we combine
+        // standard ESG check with search-keyword trust for relevant role titles
+        if (!isJoobleESGRelevant(title, snippet, search.keywords)) continue;
 
         jobs.push(enrichJob({
           id: `jooble-${jobKey}`,
@@ -546,7 +616,8 @@ async function fetchJooble(apiKey) {
 // ---------------------------------------------------------------------------
 async function fetchMuse(apiKey) {
   // The Muse has no ESG/sustainability category, so we fetch from relevant
-  // categories in London, then keyword-filter for ESG relevance
+  // categories in London, then keyword-filter for ESG relevance.
+  // We use a STRICT title check for broad categories to avoid noise.
   const categories = [
     "Business Operations",
     "Science and Engineering",
@@ -554,6 +625,8 @@ async function fetchMuse(apiKey) {
     "Management",
     "Corporate",
     "Project Management",
+    "Communications",
+    "Marketing and PR",
   ];
 
   const seen = new Set();
@@ -589,8 +662,9 @@ async function fetchMuse(apiKey) {
         const catNames = (job.categories || []).map(c => c.name).join(", ");
         const locations = (job.locations || []).map(l => l.name).join(", ");
 
-        // ESG relevance filter — The Muse has a lot of non-ESG roles
-        if (!isESGRelated(title, desc, catNames)) continue;
+        // Strict ESG relevance for The Muse — require title-level signal
+        // or strong ESG match (not just weak desc keywords like "impact")
+        if (!isMuseESGRelevant(title, desc, catNames)) continue;
 
         jobs.push(enrichJob({
           id: `muse-${job.id}`,
@@ -618,7 +692,7 @@ async function fetchMuse(apiKey) {
   }
 
   // Strategy 2: Also fetch "Flexible / Remote" location for broader reach
-  for (const category of ["Business Operations", "Science and Engineering", "Management"]) {
+  for (const category of ["Business Operations", "Science and Engineering", "Management", "Communications"]) {
     const params = new URLSearchParams({
       page: "0",
       location: "Flexible / Remote",
@@ -644,7 +718,7 @@ async function fetchMuse(apiKey) {
         const catNames = (job.categories || []).map(c => c.name).join(", ");
         const locations = (job.locations || []).map(l => l.name).join(", ");
 
-        if (!isESGRelated(title, desc, catNames)) continue;
+        if (!isMuseESGRelevant(title, desc, catNames)) continue;
 
         jobs.push(enrichJob({
           id: `muse-${job.id}`,
@@ -716,12 +790,23 @@ async function fetchAllJobs(config = {}) {
     console.log(`  [Scorer] Scoring ${allJobs.length} jobs...`);
     const scoredJobs = await scoreJobs(allJobs, config.anthropicKey);
 
+    // Step 3b: Quality gate — drop jobs with zero relevance score
+    // These passed the keyword filter but scored 0 on the heuristic (no ESG
+    // title match, no ESG depth terms, no consulting context). Keeping them
+    // would dilute the board with noise.
+    const MIN_SCORE = 3;
+    const qualityJobs = scoredJobs.filter(j => j.match_score >= MIN_SCORE);
+    const dropped = scoredJobs.length - qualityJobs.length;
+    if (dropped > 0) {
+      console.log(`  [Quality] Dropped ${dropped} jobs scoring below ${MIN_SCORE} (not ESG-relevant)`);
+    }
+
     // Step 4: Save to database
-    const count = db.upsertJobs(scoredJobs);
+    const count = db.upsertJobs(qualityJobs);
     results.total = count;
     console.log(`  [DB] Saved ${count} scored jobs`);
 
-    const verified = scoredJobs.filter(j => j.verified_sponsor === 1).length;
+    const verified = qualityJobs.filter(j => j.verified_sponsor === 1).length;
     console.log(`  [Sponsor] ${verified} jobs from verified UK visa sponsors`);
   }
 

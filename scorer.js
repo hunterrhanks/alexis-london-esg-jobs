@@ -50,6 +50,9 @@ const SOC_TITLE_MAP = [
   { pattern: /esg\s+advisor/i, soc: "2431", label: "Management consultants" },
   { pattern: /climate\s+risk/i, soc: "2425", label: "Actuaries, economists, statisticians" },
   { pattern: /sustainability\s+report/i, soc: "2431", label: "Management consultants" },
+  { pattern: /sustainability\s+communicat/i, soc: "2431", label: "Management consultants" },
+  { pattern: /esg\s+communicat/i, soc: "2431", label: "Management consultants" },
+  { pattern: /csr\s+communicat/i, soc: "2431", label: "Management consultants" },
   { pattern: /project\s+manager/i, soc: "2424", label: "Business & financial project mgmt" },
   { pattern: /consult/i, soc: "2431", label: "Management consultants" },
   { pattern: /advisory/i, soc: "2431", label: "Management consultants" },
@@ -175,26 +178,37 @@ function computeSuccessProbability(matchScore, visaConfidence) {
 // Weights for the heuristic scorer
 // ---------------------------------------------------------------------------
 const ROLE_PRIORITY_TERMS = [
-  { pattern: /sustainability\s+consultant/i, weight: 25, label: "Sustainability Consultant" },
-  { pattern: /esg\s+analyst/i, weight: 23, label: "ESG Analyst" },
-  { pattern: /esg\s+consult/i, weight: 22, label: "ESG Consulting" },
-  { pattern: /sustainability\s+analyst/i, weight: 21, label: "Sustainability Analyst" },
-  { pattern: /climate\s+consult/i, weight: 20, label: "Climate Consulting" },
-  { pattern: /sustainability\s+manager/i, weight: 19, label: "Sustainability Manager" },
-  { pattern: /esg\s+manager/i, weight: 18, label: "ESG Manager" },
-  { pattern: /esg\s+advisor/i, weight: 17, label: "ESG Advisory" },
-  { pattern: /sustainability\s+director/i, weight: 16, label: "Sustainability Director" },
-  { pattern: /climate\s+risk/i, weight: 15, label: "Climate Risk" },
-  { pattern: /sustainability/i, weight: 12, label: "Sustainability" },
-  { pattern: /\besg\b/i, weight: 12, label: "ESG" },
-  { pattern: /climate/i, weight: 10, label: "Climate" },
-  { pattern: /carbon/i, weight: 9, label: "Carbon" },
-  { pattern: /net.zero/i, weight: 9, label: "Net Zero" },
-  { pattern: /environment/i, weight: 8, label: "Environment" },
-  { pattern: /consult/i, weight: 5, label: "Consulting" },
-  { pattern: /advisory/i, weight: 5, label: "Advisory" },
-  { pattern: /impact/i, weight: 4, label: "Impact" },
-  { pattern: /governance/i, weight: 4, label: "Governance" },
+  // Tier 1: Perfect-match ESG consulting + communications roles (25-30 pts)
+  { pattern: /sustainability\s+consult/i, weight: 30, label: "Sustainability Consultant" },
+  { pattern: /esg\s+consult/i, weight: 28, label: "ESG Consulting" },
+  { pattern: /sustainability\s+communicat/i, weight: 27, label: "Sustainability Communications" },
+  { pattern: /esg\s+communicat/i, weight: 26, label: "ESG Communications" },
+  { pattern: /esg\s+analyst/i, weight: 25, label: "ESG Analyst" },
+  { pattern: /sustainability\s+analyst/i, weight: 25, label: "Sustainability Analyst" },
+  { pattern: /climate\s+consult/i, weight: 25, label: "Climate Consulting" },
+  // Tier 2: Strong ESG roles (18-24 pts)
+  { pattern: /sustainability\s+report/i, weight: 24, label: "Sustainability Reporting" },
+  { pattern: /esg\s+report/i, weight: 23, label: "ESG Reporting" },
+  { pattern: /csr\s+communicat/i, weight: 22, label: "CSR Communications" },
+  { pattern: /sustainability\s+manager/i, weight: 21, label: "Sustainability Manager" },
+  { pattern: /esg\s+manager/i, weight: 20, label: "ESG Manager" },
+  { pattern: /esg\s+advisor/i, weight: 20, label: "ESG Advisory" },
+  { pattern: /sustainability\s+director/i, weight: 19, label: "Sustainability Director" },
+  { pattern: /sustainability\s+lead/i, weight: 19, label: "Sustainability Lead" },
+  { pattern: /climate\s+risk/i, weight: 18, label: "Climate Risk" },
+  { pattern: /stakeholder\s+engagement/i, weight: 18, label: "Stakeholder Engagement" },
+  // Tier 3: ESG-adjacent (12-17 pts)
+  { pattern: /sustainability/i, weight: 15, label: "Sustainability" },
+  { pattern: /\besg\b/i, weight: 15, label: "ESG" },
+  { pattern: /climate/i, weight: 12, label: "Climate" },
+  { pattern: /carbon/i, weight: 12, label: "Carbon" },
+  { pattern: /net.zero/i, weight: 12, label: "Net Zero" },
+  { pattern: /\bcsr\b/i, weight: 12, label: "CSR" },
+  { pattern: /environment/i, weight: 10, label: "Environment" },
+  // Tier 4: Generic consulting/comms — only score if ESG context present (handled below)
+  { pattern: /consult/i, weight: 0, label: "_consulting" },
+  { pattern: /advisory/i, weight: 0, label: "_advisory" },
+  { pattern: /communicat/i, weight: 0, label: "_communications" },
 ];
 
 const ESG_DEEP_TERMS = [
@@ -203,6 +217,12 @@ const ESG_DEEP_TERMS = [
   "decarbonisation", "decarbonization", "circular economy",
   "energy transition", "biodiversity", "stakeholder engagement",
   "responsible investment", "impact investing",
+  // Communications & reporting deep terms
+  "sustainability report", "non-financial reporting", "integrated reporting",
+  "esg disclosure", "sustainability disclosure", "materiality assessment",
+  "corporate communications", "sustainability communications",
+  "science-based targets", "sbti", "net zero commitment",
+  "just transition", "climate adaptation", "nature-based",
 ];
 
 const VISA_SIGNAL_TERMS = [
@@ -223,7 +243,7 @@ function computeHeuristicScore(job) {
   const descLower = stripHtml(job.description || "").toLowerCase();
   const allText = `${titleLower} ${descLower}`;
 
-  // 1. Role priority match (0-25 points)
+  // 1. Role priority match (0-30 points)
   let rolePts = 0;
   let roleLabel = "";
   for (const term of ROLE_PRIORITY_TERMS) {
@@ -235,9 +255,9 @@ function computeHeuristicScore(job) {
     }
   }
   score += rolePts;
-  if (roleLabel) reasons.push(`Title matches "${roleLabel}"`);
+  if (roleLabel && !roleLabel.startsWith("_")) reasons.push(`Title matches "${roleLabel}"`);
 
-  // 2. ESG depth in description (0-20 points)
+  // 2. ESG depth in description (0-25 points)
   let esgDepthPts = 0;
   const esgHits = [];
   for (const term of ESG_DEEP_TERMS) {
@@ -246,20 +266,36 @@ function computeHeuristicScore(job) {
       esgHits.push(term.toUpperCase());
     }
   }
-  esgDepthPts = Math.min(esgDepthPts, 20);
+  esgDepthPts = Math.min(esgDepthPts, 25);
   score += esgDepthPts;
+  const hasESGContext = esgHits.length > 0 || rolePts >= 10;
   if (esgHits.length > 0) reasons.push(`References ${esgHits.slice(0, 3).join(", ")}`);
 
-  // 3. Verified sponsor (0-20 points)
+  // 3. Consulting/advisory/communications bonus — ONLY with ESG context (0-8 points)
+  if (hasESGContext) {
+    if (/consult|advisory|advisor/i.test(job.title || "")) {
+      score += 8;
+      if (roleLabel && roleLabel.startsWith("_")) reasons.push("Consulting/advisory role with ESG context");
+    }
+    if (/communicat|report|disclosure/i.test(job.title || "")) {
+      score += 6;
+      if (roleLabel && roleLabel.startsWith("_")) reasons.push("Communications/reporting role with ESG context");
+    }
+  }
+
+  // 4. Verified sponsor — scaled by ESG relevance (0-20 points)
+  // Full bonus only for ESG roles; reduced for non-ESG roles at sponsors
   if (job.verified_sponsor === 1) {
-    score += 20;
+    const sponsorBonus = hasESGContext ? 20 : 5;
+    score += sponsorBonus;
     reasons.push("Verified UK visa sponsor");
   } else if (job.visa_sponsorship === 1) {
-    score += 10;
+    const visaBonus = hasESGContext ? 10 : 3;
+    score += visaBonus;
     reasons.push("Listed as visa-sponsoring");
   }
 
-  // 4. Visa signals in description (0-10 points)
+  // 5. Visa signals in description (0-10 points)
   let visaPts = 0;
   for (const term of VISA_SIGNAL_TERMS) {
     if (allText.includes(term)) {
@@ -272,7 +308,7 @@ function computeHeuristicScore(job) {
     reasons.push("Description mentions visa/sponsorship support");
   }
 
-  // 5. London location bonus (0-10 points)
+  // 6. London location bonus (0-10 points)
   const locLower = (job.location || "").toLowerCase();
   if (locLower.includes("london")) {
     score += 10;
@@ -285,18 +321,16 @@ function computeHeuristicScore(job) {
     reasons.push("Remote-friendly");
   }
 
-  // 6. Consulting/advisory bonus (0-5 points) - title
-  if (/consult|advisory|advisor/i.test(job.title || "")) {
-    score += 5;
-    if (!reasons.some(r => r.includes("Consult") || r.includes("Advisory"))) {
-      reasons.push("Consulting/advisory role");
-    }
-  }
-
   // 7. Salary transparency bonus (0-5 points)
   if (job.salary) {
     score += 5;
     reasons.push("Salary disclosed");
+  }
+
+  // 8. Penalty: non-ESG role → reduce score significantly
+  if (!hasESGContext && rolePts === 0) {
+    score = Math.max(score - 15, 0);
+    reasons.push("No clear ESG relevance in title or description");
   }
 
   // Cap at 100
@@ -316,11 +350,11 @@ function generateHeuristicSummary(job, score, reasons) {
   // Build the first sentence about ESG fit
   let sentence1 = "";
   if (score >= 70) {
-    sentence1 = `This ${title} role at ${company} is a strong match for ${name}'s ESG consulting career goals`;
+    sentence1 = `This ${title} role at ${company} is a strong match for ${name}'s ESG consulting and communications career goals`;
   } else if (score >= 40) {
-    sentence1 = `This ${title} position at ${company} aligns with ${name}'s interest in ESG and sustainability`;
+    sentence1 = `This ${title} position at ${company} aligns with ${name}'s interest in ESG, sustainability, and stakeholder communications`;
   } else {
-    sentence1 = `This ${title} role at ${company} has some relevance to ${name}'s ESG career path`;
+    sentence1 = `This ${title} role at ${company} has some relevance to ${name}'s ESG consulting and communications path`;
   }
 
   // Add ESG specifics
@@ -357,7 +391,7 @@ async function computeAIScore(job, apiKey) {
     ? `£${job.salary_num.toLocaleString()} (threshold: £${socInfo ? Math.max(socInfo.newEntrant, GENERAL_THRESHOLD).toLocaleString() : GENERAL_THRESHOLD.toLocaleString()})`
     : "Not disclosed";
 
-  const prompt = `You are scoring a job listing for Alexis, a US citizen with ESG consulting experience who wants to relocate to London on a Skilled Worker visa.
+  const prompt = `You are scoring a job listing for Alexis, a US citizen with experience in ESG consulting, sustainability communications, and stakeholder engagement who wants to relocate to London on a Skilled Worker visa.
 
 Job Title: ${job.title}
 Company: ${job.company}
@@ -373,13 +407,15 @@ Description excerpt:
 ${plainDesc}
 
 Score this job 1-100 based on:
-- Role relevance to ESG consulting / sustainability analyst work (40%)
+- Role relevance to ESG consulting, sustainability communications, or reporting work (40%)
 - Likelihood of visa sponsorship for a US citizen (30%)
 - London-based or UK-accessible location (15%)
 - Career growth & impact potential (15%)
 
+IMPORTANT: Score 1-20 if the role has no clear ESG/sustainability/climate theme. Score 40+ only if the role clearly involves ESG, sustainability, climate, or related consulting/communications work.
+
 Then write EXACTLY 2 sentences:
-Sentence 1: Why this role fits Alexis's ESG career goals (mention specific ESG themes from the description).
+Sentence 1: Why this role fits Alexis's ESG consulting and communications career goals (mention specific ESG themes from the description).
 Sentence 2: The likelihood of visa support based on the text and sponsor verification status.
 
 Respond in this exact JSON format only, no other text:
@@ -431,7 +467,7 @@ async function generateOutreachKit(job, apiKey) {
 
   const plainDesc = stripHtml(job.description || "").slice(0, 2000);
 
-  const prompt = `Generate an outreach kit for Alexis, a US citizen with ESG consulting experience relocating to London, applying for:
+  const prompt = `Generate an outreach kit for Alexis, a US citizen with ESG consulting and sustainability communications experience relocating to London, applying for:
 
 Job Title: ${job.title}
 Company: ${job.company}
@@ -479,11 +515,11 @@ function generateHeuristicOutreachKit(job) {
   const company = job.company || "your company";
 
   return {
-    linkedin_message: `Hi, I'm Alexis — a US-based ESG consultant exploring opportunities in London. I was excited to see the ${title} role at ${company} and would love to learn more about the team's sustainability priorities. I bring hands-on experience in ESG strategy, stakeholder engagement, and reporting frameworks. Would you be open to a brief chat?`,
+    linkedin_message: `Hi, I'm Alexis — a US-based ESG consultant and sustainability communications specialist exploring opportunities in London. I was excited to see the ${title} role at ${company} and would love to learn more about the team's sustainability priorities. I bring hands-on experience in ESG strategy, stakeholder communications, and reporting frameworks like GRI and TCFD. Would you be open to a brief chat?`,
     resume_bullets: [
-      `Led ESG materiality assessments for Fortune 500 clients, identifying top sustainability risks and aligning reporting with GRI and TCFD frameworks.`,
-      `Developed data-driven sustainability dashboards that reduced client carbon reporting time by 40%, enabling faster regulatory compliance.`,
-      `Coordinated cross-border ESG due diligence projects spanning US and European markets, supporting $200M+ in sustainable investment decisions.`,
+      `Led ESG materiality assessments and stakeholder engagement programs for Fortune 500 clients, translating complex sustainability data into compelling narratives for investors and regulators.`,
+      `Developed sustainability communications strategies and reporting frameworks aligned with GRI, TCFD, and CSRD, reducing client disclosure preparation time by 40%.`,
+      `Coordinated cross-border ESG consulting projects spanning US and European markets, crafting stakeholder-facing content that supported $200M+ in sustainable investment decisions.`,
     ],
   };
 }
