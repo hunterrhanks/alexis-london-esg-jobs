@@ -174,6 +174,14 @@ async function loadSponsorRegister() {
   }
 }
 
+// Generic/placeholder company names that should never match the sponsor register
+const GENERIC_COMPANY_NAMES = new Set([
+  "unknown", "see listing", "confidential", "not disclosed",
+  "anonymous", "various", "multiple", "tbc", "tba",
+  "not specified", "undisclosed", "company", "employer",
+  "hiring company", "top company", "leading company",
+]);
+
 /**
  * Check if a company name appears in the sponsor register.
  * Returns { verified, rating, routes } or { verified: false }.
@@ -183,6 +191,9 @@ function checkSponsor(companyName) {
 
   let key = normalise(companyName);
   if (!key) return { verified: false };
+
+  // Skip generic/placeholder company names (e.g. Adzuna "Unknown")
+  if (GENERIC_COMPANY_NAMES.has(key)) return { verified: false };
 
   // Check alias map first (e.g. "PwC" → "pricewaterhousecoopers")
   if (ALIASES[key]) {
