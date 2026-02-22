@@ -68,6 +68,8 @@ function initialize() {
     ["salary_num", "ALTER TABLE jobs ADD COLUMN salary_num INTEGER"],
     ["visa_confidence", "ALTER TABLE jobs ADD COLUMN visa_confidence TEXT DEFAULT 'unknown'"],
     ["success_probability", "ALTER TABLE jobs ADD COLUMN success_probability INTEGER DEFAULT 0"],
+    // V4.0 migrations
+    ["is_bcorp", "ALTER TABLE jobs ADD COLUMN is_bcorp INTEGER DEFAULT 0"],
   ];
   for (const [col, sql] of migrations) {
     if (!columns.includes(col)) {
@@ -92,7 +94,8 @@ function upsertJobs(jobs) {
       job_type, remote, visa_sponsorship, salary, company_logo,
       posted_at, fetched_at, verified_sponsor, sponsor_rating,
       match_score, ai_summary, role_priority,
-      status, notes, soc_code, salary_num, visa_confidence, success_probability
+      status, notes, soc_code, salary_num, visa_confidence, success_probability,
+      is_bcorp
     ) VALUES (
       @id, @title, @company, @location, @description, @url, @source, @tags,
       @job_type, @remote, @visa_sponsorship, @salary, @company_logo,
@@ -100,7 +103,8 @@ function upsertJobs(jobs) {
       @match_score, @ai_summary, @role_priority,
       COALESCE((SELECT status FROM jobs WHERE id = @id), @status),
       COALESCE((SELECT notes FROM jobs WHERE id = @id), @notes),
-      @soc_code, @salary_num, @visa_confidence, @success_probability
+      @soc_code, @salary_num, @visa_confidence, @success_probability,
+      @is_bcorp
     )
   `);
 
@@ -133,6 +137,7 @@ function upsertJobs(jobs) {
         salary_num: row.salary_num || null,
         visa_confidence: row.visa_confidence || "unknown",
         success_probability: row.success_probability || 0,
+        is_bcorp: row.is_bcorp || 0,
       });
     }
   });
@@ -281,8 +286,11 @@ function getStats() {
   const visaGreen = db.prepare("SELECT COUNT(*) as c FROM jobs WHERE visa_confidence = 'green'").get().c;
   const visaYellow = db.prepare("SELECT COUNT(*) as c FROM jobs WHERE visa_confidence = 'yellow'").get().c;
   const visaRed = db.prepare("SELECT COUNT(*) as c FROM jobs WHERE visa_confidence = 'red'").get().c;
+  // V4.0: B Corp stats
+  const bcorpCount = db.prepare("SELECT COUNT(*) as c FROM jobs WHERE is_bcorp = 1").get().c;
+  const goldenCount = db.prepare("SELECT COUNT(*) as c FROM jobs WHERE is_bcorp = 1 AND verified_sponsor = 1").get().c;
   db.close();
-  return { total, sources, lastFetch, verifiedCount, avgScore, statusCounts, visaGreen, visaYellow, visaRed };
+  return { total, sources, lastFetch, verifiedCount, avgScore, statusCounts, visaGreen, visaYellow, visaRed, bcorpCount, goldenCount };
 }
 
 module.exports = {

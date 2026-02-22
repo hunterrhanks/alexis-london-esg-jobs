@@ -1,5 +1,5 @@
 /* ============================================================
-   Alexis London ESG Job Board — V3.0
+   Alexis London ESG Job Board — V4.0
    Visual: LinkedIn (professional structure) x Idealist (mission-driven warmth)
    ============================================================ */
 
@@ -232,6 +232,58 @@ a:hover { text-decoration: underline; }
 .badge-source { background: var(--bg); color: var(--text-muted); }
 .badge-tag { background: var(--primary-light); color: var(--primary-dark); }
 .badge-sponsor { background: var(--sponsor-light); color: var(--sponsor-badge); }
+
+/* V4.0 Golden Opportunity & B Corp badges */
+.badge-golden {
+  background: linear-gradient(135deg, #FFF8E1, #FFF3C4);
+  color: #B8860B;
+  border: 1px solid #F0C040;
+  font-weight: 700;
+  animation: golden-pulse 2s ease-in-out infinite;
+}
+@keyframes golden-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(218, 165, 32, 0.2); }
+  50% { box-shadow: 0 0 0 4px rgba(218, 165, 32, 0.1); }
+}
+.badge-bcorp { background: #E8F5E9; color: #388E3C; border: 1px solid #A5D6A7; }
+
+/* V4.0 Golden Opportunity callout in detail panel */
+.golden-opportunity-callout {
+  display: flex; align-items: flex-start; gap: 8px;
+  padding: 12px 14px; margin-bottom: 16px;
+  background: linear-gradient(135deg, #FFFDE7, #FFF8E1);
+  border: 1px solid #F0C040; border-radius: var(--radius);
+  font-size: 13px; line-height: 1.5; color: #5D4037;
+}
+.golden-opportunity-callout svg { flex-shrink: 0; margin-top: 2px; color: #DAA520; }
+.golden-opportunity-callout strong { color: #B8860B; }
+
+/* V4.0 LinkedIn Recruiter Search */
+.recruiter-search {
+  margin-bottom: 20px; padding: 16px;
+  background: #FAFAF8; border-radius: var(--radius);
+  border: 1px solid var(--border-light);
+}
+.recruiter-search h4 {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.3px; color: var(--text-muted); margin-bottom: 10px;
+}
+.recruiter-search h4 svg { color: #0A66C2; }
+.recruiter-search-links { display: flex; flex-direction: column; gap: 8px; }
+.btn-recruiter {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 9px 14px; border-radius: var(--radius-sm);
+  background: var(--surface); border: 1px solid var(--border);
+  font-size: 13px; font-weight: 500; color: var(--text-secondary);
+  text-decoration: none; transition: all 0.2s; cursor: pointer;
+}
+.btn-recruiter:hover {
+  border-color: #0A66C2; color: #0A66C2; background: #F0F7FF;
+  text-decoration: none;
+}
+.btn-recruiter svg { color: #0A66C2; flex-shrink: 0; }
+.btn-recruiter-dept { font-style: normal; }
 
 /* V3.0 Visa Confidence Badge on cards */
 .badge-visa-green { background: var(--visa-green-bg); color: var(--visa-green); }

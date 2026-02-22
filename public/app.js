@@ -1,5 +1,5 @@
 // ============================================================
-// Alexis London ESG Job Board — V3.0 Frontend
+// Alexis London ESG Job Board — V4.0 Frontend
 // ============================================================
 
 const state = {
@@ -333,6 +333,28 @@ const clockSvg = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" st
 const briefcaseSvg = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>`;
 const externalSvg = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>`;
 const shieldSvg = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>`;
+const linkedinSvg = `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>`;
+const starSvg = `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`;
+
+// ---- V4.0: LinkedIn Search URL Generator ----
+function buildLinkedInSearchUrls(company, title) {
+  const titleLower = (title || "").toLowerCase();
+  let department = "sustainability";
+  if (/esg/i.test(titleLower)) department = "ESG";
+  else if (/climate/i.test(titleLower)) department = "climate";
+  else if (/environment/i.test(titleLower)) department = "environmental";
+  else if (/communicat/i.test(titleLower)) department = "sustainability communications";
+  else if (/report/i.test(titleLower)) department = "sustainability reporting";
+  else if (/carbon/i.test(titleLower)) department = "carbon net zero";
+
+  const cleanCompany = (company || "").replace(/[^\w\s&.-]/g, "").trim();
+
+  return {
+    recruiter: `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(cleanCompany + " recruiter")}&origin=GLOBAL_SEARCH_HEADER`,
+    hiringManager: `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(cleanCompany + " " + department)}&origin=GLOBAL_SEARCH_HEADER`,
+    department,
+  };
+}
 
 // ---- Render Functions ----
 function renderJobs() {
@@ -386,7 +408,9 @@ function renderJobs() {
             <div class="job-badges">
               <span class="badge badge-status badge-status-${jobStatus}">${statusLabel(jobStatus)}</span>
               <span class="badge badge-visa-${visaConf}" title="Visa Confidence: ${visaConfidenceLabel(visaConf)}">${visaConfidenceEmoji(visaConf)} Visa</span>
+              ${(job.is_bcorp && job.verified_sponsor) ? `<span class="badge badge-golden">${starSvg} Golden Opportunity</span>` : ""}
               ${job.verified_sponsor ? `<span class="badge badge-sponsor">${shieldSvg} Verified</span>` : ""}
+              ${job.is_bcorp && !job.verified_sponsor ? '<span class="badge badge-bcorp">B Corp</span>' : ""}
               ${!job.verified_sponsor && job.visa_sponsorship ? '<span class="badge badge-visa">Visa Sponsor</span>' : ""}
               ${job.remote ? '<span class="badge badge-remote">Remote</span>' : ""}
               <span class="badge badge-source">${escapeHtml(job.source)}</span>
@@ -481,14 +505,24 @@ function buildDetailHtml(job) {
       </div>
 
       <div class="detail-badges">
+        ${(job.is_bcorp && job.verified_sponsor)
+          ? `<span class="badge badge-golden">${starSvg} Golden Opportunity</span>`
+          : ""}
         ${job.verified_sponsor
           ? `<span class="badge badge-sponsor">${shieldSvg} Verified UK Sponsor${job.sponsor_rating ? ` (${escapeHtml(job.sponsor_rating)}-rated)` : ""}</span>`
           : ""}
+        ${job.is_bcorp ? '<span class="badge badge-bcorp">B Corp Certified</span>' : ""}
         ${!job.verified_sponsor && job.visa_sponsorship ? '<span class="badge badge-visa">Visa Sponsorship</span>' : ""}
         ${job.remote ? '<span class="badge badge-remote">Remote</span>' : ""}
         <span class="badge badge-source">${escapeHtml(job.source)}</span>
         ${tags.map((t) => `<span class="badge badge-tag">${escapeHtml(t)}</span>`).join("")}
       </div>
+
+      ${(job.is_bcorp && job.verified_sponsor)
+        ? `<div class="golden-opportunity-callout">
+            ${starSvg} <strong>Golden Opportunity</strong> &mdash; ${escapeHtml(job.company)} is both a certified B Corporation and a verified UK visa sponsor. This is a rare, high-alignment match for Alexis.
+          </div>`
+        : ""}
 
       ${job.ai_summary
         ? `<div class="detail-ai-summary">
@@ -501,6 +535,23 @@ function buildDetailHtml(job) {
         Apply on ${escapeHtml(job.source)} ${externalSvg}
       </a>
     </div>
+
+    <!-- V4.0: Find the Recruiter — LinkedIn Search -->
+    ${(() => {
+      const urls = buildLinkedInSearchUrls(job.company, job.title);
+      return `
+    <div class="recruiter-search">
+      <h4>${linkedinSvg} Find the Recruiter</h4>
+      <div class="recruiter-search-links">
+        <a href="${escapeAttr(urls.recruiter)}" target="_blank" rel="noopener" class="btn-recruiter">
+          ${linkedinSvg} Find Recruiters at ${escapeHtml(job.company)}
+        </a>
+        <a href="${escapeAttr(urls.hiringManager)}" target="_blank" rel="noopener" class="btn-recruiter btn-recruiter-dept">
+          ${linkedinSvg} Find ${escapeHtml(urls.department)} Team
+        </a>
+      </div>
+    </div>`;
+    })()}
 
     <!-- CRM Section: Status + Notes -->
     <div class="detail-crm-section">

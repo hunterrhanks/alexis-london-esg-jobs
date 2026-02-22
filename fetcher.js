@@ -2,6 +2,7 @@ const fetch = require("node-fetch");
 const RSSParser = require("rss-parser");
 const db = require("./db");
 const sponsor = require("./sponsor");
+const bcorp = require("./bcorp");
 const { scoreJobs } = require("./scorer");
 
 const NOW = () => new Date().toISOString();
@@ -145,6 +146,9 @@ function enrichJob(rawJob) {
   if (sponsorResult.verified) {
     rawJob.visa_sponsorship = 1;
   }
+
+  // B Corp check
+  rawJob.is_bcorp = bcorp.checkBCorp(rawJob.company) ? 1 : 0;
 
   // Role priority
   rawJob.role_priority = getRolePriority(rawJob.title);
@@ -788,8 +792,9 @@ async function fetchMuse(apiKey) {
 async function fetchAllJobs(config = {}) {
   console.log("\n=== Starting job fetch ===\n");
 
-  // Step 1: Load the UK sponsor register
+  // Step 1: Load the UK sponsor register + B Corp directory
   await sponsor.ensureLoaded();
+  await bcorp.ensureLoaded();
 
   const results = { total: 0, sources: {} };
   let allJobs = [];

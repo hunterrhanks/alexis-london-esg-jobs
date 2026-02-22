@@ -152,7 +152,7 @@ cron.schedule("0 6 * * *", async () => {
 
 // ---- Start Server ----
 app.listen(PORT, async () => {
-  console.log(`\n  Alexis London ESG Job Board V3.0 running at http://localhost:${PORT}\n`);
+  console.log(`\n  Alexis London ESG Job Board V4.0 running at http://localhost:${PORT}\n`);
 
   // Fetch jobs on first startup if database is empty
   const stats = db.getStats();

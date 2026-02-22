@@ -1,11 +1,15 @@
 // ============================================================
-// Job Match Scoring + AI Summary Engine — V3.0
+// Job Match Scoring + AI Summary Engine — V4.0
 //
-// Now includes:
+// V4.0 additions:
+//  • Reporting Narrative bonus (CSRD/Materiality + Communications)
+//  • Weighted Success Probability (40% match + 40% visa + 20% salary)
+//  • B-Corp / Golden Opportunity support
+//
+// V3.0 features:
 //  • 2026 Skilled Worker Visa salary intelligence
 //  • SOC 2020 code mapping for ESG roles
 //  • Visa Confidence traffic light (green / yellow / red)
-//  • Success Probability composite score
 //  • AI Outreach Kit (LinkedIn message + resume bullets)
 // ============================================================
 
@@ -165,13 +169,34 @@ function computeVisaConfidence(job) {
 }
 
 // ---------------------------------------------------------------------------
-// Success Probability — composite of Match Score + Visa Confidence
+// Success Probability — V4.0 weighted formula
+//   40% match score  — how well the role fits Alexis's ESG consulting profile
+//   40% visa verification — sponsor register + salary meets threshold
+//   20% salary margin — how far above the £41,700 Skilled Worker floor
 // ---------------------------------------------------------------------------
-function computeSuccessProbability(matchScore, visaConfidence) {
-  // Match Score contributes 60%, Visa Confidence contributes 40%
-  const visaMultiplier = { green: 1.0, yellow: 0.55, red: 0.15, unknown: 0.3 };
-  const visaScore = (visaMultiplier[visaConfidence] || 0.3) * 100;
-  return Math.round(matchScore * 0.6 + visaScore * 0.4);
+function computeSuccessProbability(matchScore, visaConfidence, salaryNum) {
+  // 40% match score (0-100 → 0-40)
+  const matchComponent = matchScore * 0.4;
+
+  // 40% visa verification (0-100 → 0-40)
+  const visaMap = { green: 100, yellow: 55, red: 15, unknown: 30 };
+  const visaComponent = (visaMap[visaConfidence] || 30) * 0.4;
+
+  // 20% salary margin above £41,700 floor (0-100 → 0-20)
+  let salaryScore;
+  if (!salaryNum) {
+    salaryScore = 50; // unknown salary → neutral assumption
+  } else if (salaryNum >= GENERAL_THRESHOLD) {
+    // At threshold = 50; at threshold + 50% (£62,550) = 100; capped at 100
+    const margin = (salaryNum - GENERAL_THRESHOLD) / GENERAL_THRESHOLD;
+    salaryScore = Math.min(50 + margin * 100, 100);
+  } else {
+    // Below threshold → proportional (£0 → 0, threshold → 50)
+    salaryScore = (salaryNum / GENERAL_THRESHOLD) * 50;
+  }
+  const salaryComponent = salaryScore * 0.2;
+
+  return Math.round(matchComponent + visaComponent + salaryComponent);
 }
 
 // ---------------------------------------------------------------------------
@@ -270,6 +295,15 @@ function computeHeuristicScore(job) {
   score += esgDepthPts;
   const hasESGContext = esgHits.length > 0 || rolePts >= 10;
   if (esgHits.length > 0) reasons.push(`References ${esgHits.slice(0, 3).join(", ")}`);
+
+  // V4.0: Reporting Narrative bonus — targets Alexis's comms-specific ESG strengths
+  // If a job mentions CSRD/Materiality AND Communications/Narrative → +15
+  const hasReportingFramework = /csrd|materiality/i.test(allText);
+  const hasNarrativeComms = /communicat|narrative/i.test(allText);
+  if (hasReportingFramework && hasNarrativeComms) {
+    score += 15;
+    reasons.push("Reporting Narrative role (CSRD/Materiality + Communications)");
+  }
 
   // 3. Consulting/advisory/communications bonus — ONLY with ESG context (0-8 points)
   if (hasESGContext) {
@@ -557,8 +591,8 @@ async function scoreJob(job, anthropicKey) {
     ai_summary = generateHeuristicSummary(job, score, reasons);
   }
 
-  // Step 5: Compute success probability
-  const success_probability = computeSuccessProbability(match_score, confidence);
+  // Step 5: Compute success probability (V4.0 weighted: 40% match + 40% visa + 20% salary)
+  const success_probability = computeSuccessProbability(match_score, confidence, job.salary_num);
 
   return {
     match_score,
